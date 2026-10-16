@@ -73,8 +73,8 @@
         </div>
         <div class="ch-status">
           <span class="ch-counter" id="ch-counter">Get ready</span>
-          <span class="rec-pill" title="Your camera is recording">
-            <i class="rec-dot" aria-hidden="true"></i>REC <span id="rec-time">00:00</span>
+          <span class="snap-pill" title="Photos taken">
+            📸 <span id="snap-count">0</span> / <span id="snap-total">8</span>
           </span>
           <button class="quit-btn" id="btn-quit" type="button" aria-label="Quit the challenge">✕</button>
         </div>
@@ -103,13 +103,15 @@
         </figure>
         <figure class="panel panel-cam">
           <video id="cam-preview" autoplay playsinline webkit-playsinline muted></video>
-          <div class="rec-badge"><i class="rec-dot" aria-hidden="true"></i>Recording</div>
+          <div class="cam-badge"><i class="live-dot" aria-hidden="true"></i>Camera on</div>
           <div class="count-overlay" id="count-overlay" aria-hidden="true"><span id="count-num"></span></div>
+          <div class="shutter" id="shutter" aria-hidden="true"></div>
+          <div class="snap-pop" id="snap-pop" aria-hidden="true">📸</div>
           <figcaption class="panel-tag">You</figcaption>
         </figure>
       </div>
 
-      <ol class="step-dots" id="step-dots" aria-hidden="true"></ol>
+      <ol class="snap-strip" id="snap-strip" aria-label="Your photos"></ol>
     </section>
 
     <!-- ============================================================
@@ -136,18 +138,16 @@
 
       <div class="reveal-inner">
         <header class="reveal-top">
-          <h2 id="reveal-title" class="reveal-title">Surprise! 💘</h2>
+          <h2 id="reveal-title" class="visually-hidden">Your photo show</h2>
           <div class="sound-controls" id="sound-controls">
             <button id="btn-mute" class="icon-btn" type="button" aria-label="Mute music" aria-pressed="false">🔊</button>
             <input id="volume" class="volume" type="range" min="0" max="1" step="0.05" value="0.8" aria-label="Music volume">
           </div>
         </header>
 
-        <div class="video-stage">
-          <div class="video-frame" id="video-frame">
-            <video id="reveal-video" playsinline webkit-playsinline preload="auto"></video>
-            <div class="caption" id="caption" aria-live="polite"></div>
-            <div class="gotcha" id="gotcha" aria-hidden="true"><span id="gotcha-text">Gotcha! 💕</span></div>
+        <div class="show-stage">
+          <div class="show-frame" id="show-frame">
+            <canvas id="show-canvas" aria-label="Animated show made from your photos"></canvas>
             <button id="btn-play-surprise" class="play-surprise" type="button" hidden>
               <span class="play-icon" aria-hidden="true">▶</span> Play Surprise 💗
             </button>
@@ -163,10 +163,11 @@
             <button id="btn-try-again" class="love-btn" type="button">🎮 Try Again</button>
             <button id="btn-save" class="love-btn love-btn-primary" type="button">💾 Save My Video</button>
           </div>
+          <button id="btn-save-collage" class="link-btn" type="button">🖼️ Save Photo Collage</button>
           <p id="save-status" class="save-status" role="status"></p>
         </div>
 
-        <p class="privacy-note">🔒 Your video stays on this device — nothing was uploaded.</p>
+        <p class="privacy-note">🔒 Your photos stay on this device — nothing was uploaded.</p>
       </div>
     </section>
   </main>
@@ -177,18 +178,15 @@
   <div id="consent-modal" class="modal" role="dialog" aria-modal="true" aria-labelledby="consent-title" hidden>
     <div class="modal-card">
       <div class="big-icon" aria-hidden="true">🎥</div>
-      <h2 id="consent-title">Camera &amp; Recording</h2>
+      <h2 id="consent-title">Camera &amp; Photos</h2>
       <p class="modal-lead">This challenge uses your <strong>front camera</strong>. Before we start:</p>
       <ul class="consent-list">
-        <li><span aria-hidden="true">🔴</span><span>We will <strong>record a video of you</strong> while you follow the moves (about <span class="js-total-time">1 minute</span>).</span></li>
-        <li><span aria-hidden="true">▶️</span><span>The recording will be <strong>played back to you</strong> after the challenge is complete.</span></li>
+        <li><span aria-hidden="true">📸</span><span>We will <strong>take one photo of you during each move</strong> (<span class="js-photo-count">8</span> photos, about <span class="js-total-time">1 minute</span>).</span></li>
+        <li><span aria-hidden="true">▶️</span><span>Your photos will be <strong>shown back to you as a short animation</strong> when the challenge is complete.</span></li>
         <li><span aria-hidden="true">🔒</span><span>Everything stays <strong>inside this browser</strong>. Nothing is uploaded to any server.</span></li>
-        <li><span aria-hidden="true">🗑️</span><span>The video is gone when you restart or close the page — unless you choose to save it.</span></li>
+        <li><span aria-hidden="true">🗑️</span><span>The photos are gone when you restart or close the page — unless you choose to save them.</span></li>
+        <li><span aria-hidden="true">🔇</span><span>No sound is recorded — the microphone is never used.</span></li>
       </ul>
-      <label class="check-row">
-        <input type="checkbox" id="consent-audio">
-        <span>Also record sound <em>(optional — uses your microphone)</em></span>
-      </label>
       <div class="modal-actions">
         <button id="btn-consent-cancel" class="btn-ghost" type="button">Cancel</button>
         <button id="btn-consent-agree" class="btn-primary" type="button">I Agree — Start Camera</button>
@@ -218,18 +216,18 @@
   <div id="save-modal" class="modal modal-love" role="dialog" aria-modal="true" aria-labelledby="save-title" hidden>
     <div class="modal-card">
       <div class="big-icon" aria-hidden="true">💌</div>
-      <h2 id="save-title">Saving the full video isn't supported here</h2>
-      <p class="modal-lead" id="save-reason">This browser can't combine your clip with the romantic effects into one video file.</p>
+      <h2 id="save-title">Saving the video isn't supported here</h2>
+      <p class="modal-lead" id="save-reason">This browser can't turn your photo animation into a video file.</p>
       <p><strong>You can still keep the moment:</strong></p>
       <ul class="tips">
-        <li>📸 <strong>Save a Romantic Photo Card</strong> — a picture of you with the pink frame, hearts and caption.</li>
+        <li>🖼️ <strong>Save the Photo Collage</strong> — all your photos on one pink picture with hearts and captions.</li>
         <li>📱 <strong>Screen-record it:</strong> start your device's screen recorder, then tap <em>Watch Again</em>.
           <br><small>iPhone: Control Centre → Screen Recording · Android: Quick Settings → Screen record · Mac: ⌘ Shift 5 · Windows: Win + Alt + R</small></li>
         <li>💻 Open this page in the latest <strong>Chrome, Edge, Firefox or Safari</strong> to save the full video.</li>
       </ul>
       <div class="modal-actions">
         <button id="btn-save-close" class="btn-ghost" type="button">Close</button>
-        <button id="btn-save-photo" class="btn-primary" type="button">📸 Save Photo Card</button>
+        <button id="btn-save-photo" class="btn-primary" type="button">🖼️ Save Photo Collage</button>
       </div>
     </div>
   </div>
@@ -237,10 +235,7 @@
   <div id="flash" class="flash" aria-hidden="true"></div>
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
-  <!-- Hidden canvas used to build the downloadable "romantic edit" video -->
-  <canvas id="compose-canvas" class="compose-canvas" aria-hidden="true"></canvas>
-
-  <!-- Background music (replace assets/romantic.mp3 to change the song) -->
+  <!-- Background music (the file is set in script.js → CONFIG.music.src) -->
   <audio id="music" preload="auto" loop></audio>
 
   <!-- Cartoon buddy used for the move demonstrations (cloned by script.js) -->
