@@ -1,0 +1,377 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0e1124">
+  <meta name="color-scheme" content="dark">
+  <title>Can You Follow My Moves?</title>
+  <meta name="description" content="A quick interactive movement challenge. Follow the moves and complete the challenge!">
+  <meta property="og:title" content="Can You Follow My Moves?">
+  <meta property="og:description" content="Follow the instructions and complete the challenge!">
+  <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+  <link rel="preload" href="assets/fonts/Fredoka-latin.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body data-screen="welcome">
+  <main id="app">
+
+    <!-- ============================================================
+         SCREEN 1 · WELCOME
+         ============================================================ -->
+    <section id="screen-welcome" class="screen is-active" aria-labelledby="welcome-title">
+      <div class="game-bg" aria-hidden="true">
+        <span class="shape s-circle"></span>
+        <span class="shape s-triangle"></span>
+        <span class="shape s-square"></span>
+        <span class="shape s-plus"></span>
+        <span class="shape s-ring"></span>
+        <span class="shape s-dot d1"></span>
+        <span class="shape s-dot d2"></span>
+        <span class="shape s-dot d3"></span>
+      </div>
+
+      <div class="welcome-wrap">
+        <div class="welcome-buddy" id="welcome-buddy" aria-hidden="true"></div>
+        <div class="welcome-card">
+          <span class="chip">🎮 Mini Movement Challenge</span>
+          <h1 id="welcome-title" class="welcome-title">Can You Follow <span>My Moves?</span></h1>
+          <p class="welcome-sub">Follow the instructions and complete the challenge!</p>
+          <button id="btn-start" class="btn-start" type="button">
+            <span class="btn-start-ring" aria-hidden="true"></span>
+            START
+          </button>
+          <ul class="welcome-meta" id="welcome-meta">
+            <li>🕹️ <span id="meta-moves">8</span> moves</li>
+            <li>⏱️ about <span id="meta-time">1</span> min</li>
+            <li>📷 camera needed</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============================================================
+         CAMERA PERMISSION (waiting)
+         ============================================================ -->
+    <section id="screen-permission" class="screen" aria-labelledby="permission-title">
+      <div class="center-card">
+        <div class="big-icon" aria-hidden="true">📷</div>
+        <h2 id="permission-title">Allow camera access</h2>
+        <p>Tap <strong>Allow</strong> when your browser asks to use the camera.</p>
+        <div class="dots-loader" aria-hidden="true"><span></span><span></span><span></span></div>
+      </div>
+    </section>
+
+    <!-- ============================================================
+         SCREEN 2 · CHALLENGE
+         ============================================================ -->
+    <section id="screen-challenge" class="screen" aria-label="Movement challenge">
+      <header class="ch-header">
+        <div class="ch-progress" id="ch-progress" role="progressbar" aria-label="Challenge progress"
+             aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+          <div class="ch-progress-fill" id="ch-progress-fill"></div>
+        </div>
+        <div class="ch-status">
+          <span class="ch-counter" id="ch-counter">Get ready</span>
+          <span class="rec-pill" title="Your camera is recording">
+            <i class="rec-dot" aria-hidden="true"></i>REC <span id="rec-time">00:00</span>
+          </span>
+          <button class="quit-btn" id="btn-quit" type="button" aria-label="Quit the challenge">✕</button>
+        </div>
+      </header>
+
+      <div class="move-card" id="move-card">
+        <div class="move-emoji" id="move-emoji" aria-hidden="true">🙂</div>
+        <div class="move-text">
+          <div class="phase-label" id="phase-label">Get ready…</div>
+          <h2 class="move-title" id="move-title" aria-live="polite">Get into the frame!</h2>
+          <p class="move-hint" id="move-hint">Make sure your face and hands are visible</p>
+        </div>
+        <div class="timer" aria-hidden="true">
+          <svg viewBox="0 0 48 48">
+            <circle class="timer-track" cx="24" cy="24" r="20"></circle>
+            <circle class="timer-fill" id="timer-fill" cx="24" cy="24" r="20"></circle>
+          </svg>
+          <span class="timer-num" id="timer-num">3</span>
+        </div>
+      </div>
+
+      <div class="stage">
+        <figure class="panel panel-demo">
+          <div class="buddy-holder" id="challenge-buddy"></div>
+          <figcaption class="panel-tag">Copy me!</figcaption>
+        </figure>
+        <figure class="panel panel-cam">
+          <video id="cam-preview" autoplay playsinline webkit-playsinline muted></video>
+          <div class="rec-badge"><i class="rec-dot" aria-hidden="true"></i>Recording</div>
+          <div class="count-overlay" id="count-overlay" aria-hidden="true"><span id="count-num"></span></div>
+          <figcaption class="panel-tag">You</figcaption>
+        </figure>
+      </div>
+
+      <ol class="step-dots" id="step-dots" aria-hidden="true"></ol>
+    </section>
+
+    <!-- ============================================================
+         SCREEN 3 · COMPLETE + LOADING
+         ============================================================ -->
+    <section id="screen-complete" class="screen" aria-labelledby="complete-title">
+      <div class="center-card complete-card">
+        <div class="complete-badge" aria-hidden="true">🏆</div>
+        <h2 id="complete-title" class="complete-title">Challenge Complete!</h2>
+        <p class="complete-sub" id="complete-sub">Preparing Your Results...</p>
+        <div class="loadbar" aria-hidden="true"><div class="loadbar-fill" id="loadbar-fill"></div></div>
+      </div>
+    </section>
+
+    <!-- ============================================================
+         SCREEN 4 · ROMANTIC PRANK REVEAL
+         ============================================================ -->
+    <section id="screen-reveal" class="screen" aria-labelledby="reveal-title">
+      <div class="love-bg" aria-hidden="true">
+        <div class="love-glow"></div>
+        <div class="love-sparkles" id="love-sparkles"></div>
+        <div class="love-hearts" id="love-hearts"></div>
+      </div>
+
+      <div class="reveal-inner">
+        <header class="reveal-top">
+          <h2 id="reveal-title" class="reveal-title">Surprise! 💘</h2>
+          <div class="sound-controls" id="sound-controls">
+            <button id="btn-mute" class="icon-btn" type="button" aria-label="Mute music" aria-pressed="false">🔊</button>
+            <input id="volume" class="volume" type="range" min="0" max="1" step="0.05" value="0.8" aria-label="Music volume">
+          </div>
+        </header>
+
+        <div class="video-stage">
+          <div class="video-frame" id="video-frame">
+            <video id="reveal-video" playsinline webkit-playsinline preload="auto"></video>
+            <div class="caption" id="caption" aria-live="polite"></div>
+            <div class="gotcha" id="gotcha" aria-hidden="true"><span id="gotcha-text">Gotcha! 💕</span></div>
+            <button id="btn-play-surprise" class="play-surprise" type="button" hidden>
+              <span class="play-icon" aria-hidden="true">▶</span> Play Surprise 💗
+            </button>
+            <span class="frame-heart fh-1" aria-hidden="true">💗</span>
+            <span class="frame-heart fh-2" aria-hidden="true">💖</span>
+            <span class="frame-heart fh-3" aria-hidden="true">✨</span>
+          </div>
+        </div>
+
+        <div class="reveal-actions" id="reveal-actions">
+          <div class="action-row">
+            <button id="btn-watch-again" class="love-btn" type="button">🔁 Watch Again</button>
+            <button id="btn-try-again" class="love-btn" type="button">🎮 Try Again</button>
+            <button id="btn-save" class="love-btn love-btn-primary" type="button">💾 Save My Video</button>
+          </div>
+          <p id="save-status" class="save-status" role="status"></p>
+        </div>
+
+        <p class="privacy-note">🔒 Your video stays on this device — nothing was uploaded.</p>
+      </div>
+    </section>
+  </main>
+
+  <!-- ============================================================
+       CONSENT DIALOG
+       ============================================================ -->
+  <div id="consent-modal" class="modal" role="dialog" aria-modal="true" aria-labelledby="consent-title" hidden>
+    <div class="modal-card">
+      <div class="big-icon" aria-hidden="true">🎥</div>
+      <h2 id="consent-title">Camera &amp; Recording</h2>
+      <p class="modal-lead">This challenge uses your <strong>front camera</strong>. Before we start:</p>
+      <ul class="consent-list">
+        <li><span aria-hidden="true">🔴</span><span>We will <strong>record a video of you</strong> while you follow the moves (about <span class="js-total-time">1 minute</span>).</span></li>
+        <li><span aria-hidden="true">▶️</span><span>The recording will be <strong>played back to you</strong> after the challenge is complete.</span></li>
+        <li><span aria-hidden="true">🔒</span><span>Everything stays <strong>inside this browser</strong>. Nothing is uploaded to any server.</span></li>
+        <li><span aria-hidden="true">🗑️</span><span>The video is gone when you restart or close the page — unless you choose to save it.</span></li>
+      </ul>
+      <label class="check-row">
+        <input type="checkbox" id="consent-audio">
+        <span>Also record sound <em>(optional — uses your microphone)</em></span>
+      </label>
+      <div class="modal-actions">
+        <button id="btn-consent-cancel" class="btn-ghost" type="button">Cancel</button>
+        <button id="btn-consent-agree" class="btn-primary" type="button">I Agree — Start Camera</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================================================
+       ERROR DIALOG (camera / recording problems)
+       ============================================================ -->
+  <div id="error-modal" class="modal" role="alertdialog" aria-modal="true" aria-labelledby="error-title" hidden>
+    <div class="modal-card">
+      <div class="big-icon" id="error-icon" aria-hidden="true">🚫</div>
+      <h2 id="error-title">Camera blocked</h2>
+      <p id="error-message" class="modal-lead"></p>
+      <ul id="error-tips" class="tips"></ul>
+      <div class="modal-actions">
+        <button id="btn-error-back" class="btn-ghost" type="button">Back to Start</button>
+        <button id="btn-error-retry" class="btn-primary" type="button">Try Again</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================================================
+       SAVE FALLBACK DIALOG (browser can't build the video file)
+       ============================================================ -->
+  <div id="save-modal" class="modal modal-love" role="dialog" aria-modal="true" aria-labelledby="save-title" hidden>
+    <div class="modal-card">
+      <div class="big-icon" aria-hidden="true">💌</div>
+      <h2 id="save-title">Saving the full video isn't supported here</h2>
+      <p class="modal-lead" id="save-reason">This browser can't combine your clip with the romantic effects into one video file.</p>
+      <p><strong>You can still keep the moment:</strong></p>
+      <ul class="tips">
+        <li>📸 <strong>Save a Romantic Photo Card</strong> — a picture of you with the pink frame, hearts and caption.</li>
+        <li>📱 <strong>Screen-record it:</strong> start your device's screen recorder, then tap <em>Watch Again</em>.
+          <br><small>iPhone: Control Centre → Screen Recording · Android: Quick Settings → Screen record · Mac: ⌘ Shift 5 · Windows: Win + Alt + R</small></li>
+        <li>💻 Open this page in the latest <strong>Chrome, Edge, Firefox or Safari</strong> to save the full video.</li>
+      </ul>
+      <div class="modal-actions">
+        <button id="btn-save-close" class="btn-ghost" type="button">Close</button>
+        <button id="btn-save-photo" class="btn-primary" type="button">📸 Save Photo Card</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="flash" class="flash" aria-hidden="true"></div>
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+  <!-- Hidden canvas used to build the downloadable "romantic edit" video -->
+  <canvas id="compose-canvas" class="compose-canvas" aria-hidden="true"></canvas>
+
+  <!-- Background music (replace assets/romantic.mp3 to change the song) -->
+  <audio id="music" preload="auto" loop></audio>
+
+  <!-- Cartoon buddy used for the move demonstrations (cloned by script.js) -->
+  <template id="buddy-template">
+    <svg class="buddy" viewBox="0 0 200 250" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Cartoon buddy showing the move" data-pose="rest">
+      <ellipse class="b-floor" cx="100" cy="236" rx="52" ry="7"></ellipse>
+      <g transform="translate(100 232)"><g class="b-all"><g transform="translate(-100 -232)">
+
+        <!-- legs -->
+        <rect class="b-pants" x="81" y="178" width="16" height="48" rx="8"></rect>
+        <rect class="b-pants" x="103" y="178" width="16" height="48" rx="8"></rect>
+        <ellipse class="b-shoe" cx="87" cy="228" rx="12" ry="6.5"></ellipse>
+        <ellipse class="b-shoe" cx="113" cy="228" rx="12" ry="6.5"></ellipse>
+
+        <!-- body -->
+        <rect class="b-shirt" x="71" y="106" width="58" height="84" rx="26"></rect>
+        <path class="b-star" d="M100 138 l4.1 8.3 9.2 1.3 -6.6 6.5 1.6 9.1 -8.3 -4.3 -8.3 4.3 1.6 -9.1 -6.6 -6.5 9.2 -1.3 z"></path>
+
+        <!-- head -->
+        <g transform="translate(100 110)"><g class="b-head"><g transform="translate(-100 -110)">
+          <circle class="b-skin" cx="100" cy="68" r="44"></circle>
+          <ellipse class="b-skin" cx="56" cy="72" rx="7" ry="9"></ellipse>
+          <ellipse class="b-skin" cx="144" cy="72" rx="7" ry="9"></ellipse>
+          <path class="b-hair" d="M56 66 C52 36 74 21 100 21 C128 21 149 37 144 66 C138 54 128 47 116 47 C112 41 104 38 96 42 C88 39 78 43 74 50 C66 52 60 58 56 66 Z"></path>
+          <path class="b-ahoge" d="M101 23 C99 13 105 7 114 9"></path>
+
+          <g class="b-eyes-open">
+            <g class="b-blink-open">
+              <ellipse class="b-eye" cx="84" cy="70" rx="5.5" ry="7"></ellipse>
+              <ellipse class="b-eye" cx="116" cy="70" rx="5.5" ry="7"></ellipse>
+              <circle class="b-eye-hi" cx="86" cy="67" r="2"></circle>
+              <circle class="b-eye-hi" cx="118" cy="67" r="2"></circle>
+            </g>
+            <g class="b-blink-closed">
+              <path class="b-line" d="M78 71 Q84 75 90 71"></path>
+              <path class="b-line" d="M110 71 Q116 75 122 71"></path>
+            </g>
+          </g>
+          <g class="b-eyes-happy">
+            <path class="b-line" d="M77 73 Q84 63 91 73"></path>
+            <path class="b-line" d="M109 73 Q116 63 123 73"></path>
+          </g>
+          <g class="b-eyes-wink">
+            <ellipse class="b-eye" cx="84" cy="70" rx="5.5" ry="7"></ellipse>
+            <circle class="b-eye-hi" cx="86" cy="67" r="2"></circle>
+            <path class="b-line" d="M109 69 L122 72 L109 75"></path>
+          </g>
+
+          <ellipse class="b-blush" cx="73" cy="84" rx="8" ry="5"></ellipse>
+          <ellipse class="b-blush" cx="127" cy="84" rx="8" ry="5"></ellipse>
+
+          <path class="b-mouth b-mouth-smile b-line" d="M90 88 Q100 97 110 88"></path>
+          <g class="b-mouth b-mouth-grin">
+            <path class="b-mouth-fill" d="M85 85 Q100 88 115 85 Q113 104 100 104 Q87 104 85 85 Z"></path>
+            <path class="b-tongue" d="M92 98 Q100 93 108 98 Q105 104 100 104 Q95 104 92 98 Z"></path>
+          </g>
+          <path class="b-mouth b-mouth-kiss b-lips" d="M97 84 Q106 85 100 90 Q107 92 98 96"></path>
+          <path class="b-mouth b-mouth-cute b-line" d="M91 88 Q95.5 93 100 88 Q104.5 93 109 88"></path>
+        </g></g></g>
+
+        <!-- arm on the screen-left side (= user's LEFT hand when mirrored) -->
+        <g class="arm arm-sl" transform="translate(78 126)">
+          <g class="j sh"><g class="ja sh-a">
+            <line class="b-arm" x1="0" y1="0" x2="0" y2="34"></line>
+            <line class="b-sleeve" x1="0" y1="0" x2="0" y2="15"></line>
+            <g transform="translate(0 34)">
+              <g class="j el"><g class="ja el-a">
+                <line class="b-arm" x1="0" y1="0" x2="0" y2="38"></line>
+                <g transform="translate(0 38)">
+                  <g class="j wr"><g class="ja wr-a">
+                    <rect class="b-finger" x="-3" y="2" width="6" height="17" rx="3"></rect>
+                    <circle class="b-hand" r="9"></circle>
+                    <ellipse class="b-thumb" cx="-7" cy="1" rx="3.6" ry="5"></ellipse>
+                  </g></g>
+                </g>
+              </g></g>
+            </g>
+          </g></g>
+        </g>
+
+        <!-- arm on the screen-right side (= user's RIGHT hand when mirrored) -->
+        <g class="arm arm-sr" transform="translate(122 126)">
+          <g class="j sh"><g class="ja sh-a">
+            <line class="b-arm" x1="0" y1="0" x2="0" y2="34"></line>
+            <line class="b-sleeve" x1="0" y1="0" x2="0" y2="15"></line>
+            <g transform="translate(0 34)">
+              <g class="j el"><g class="ja el-a">
+                <line class="b-arm" x1="0" y1="0" x2="0" y2="38"></line>
+                <g transform="translate(0 38)">
+                  <g class="j wr"><g class="ja wr-a">
+                    <rect class="b-finger" x="-3" y="2" width="6" height="17" rx="3"></rect>
+                    <circle class="b-hand" r="9"></circle>
+                    <ellipse class="b-thumb" cx="7" cy="1" rx="3.6" ry="5"></ellipse>
+                  </g></g>
+                </g>
+              </g></g>
+            </g>
+          </g></g>
+        </g>
+
+        <!-- props in front -->
+        <g transform="translate(100 143)"><g class="b-prop b-prop-heart">
+          <path class="b-heart" d="M0 15 C-4 11 -23 1 -23 -10 C-23 -20 -13 -24 0 -13 C13 -24 23 -20 23 -10 C23 1 4 11 0 15 Z"></path>
+        </g></g>
+        <g class="b-prop b-prop-sparkles">
+          <path class="b-spark sp1" d="M36 40 l3 8 8 3 -8 3 -3 8 -3 -8 -8 -3 8 -3 z"></path>
+          <path class="b-spark sp2" d="M166 30 l2.5 6.5 6.5 2.5 -6.5 2.5 -2.5 6.5 -2.5 -6.5 -6.5 -2.5 6.5 -2.5 z"></path>
+          <path class="b-spark sp3" d="M24 104 l2 5 5 2 -5 2 -2 5 -2 -5 -5 -2 5 -2 z"></path>
+          <path class="b-spark sp4" d="M176 100 l2.5 6.5 6.5 2.5 -6.5 2.5 -2.5 6.5 -2.5 -6.5 -6.5 -2.5 6.5 -2.5 z"></path>
+        </g>
+        <g class="b-prop b-prop-wave">
+          <path class="b-motion" d="M176 52 Q184 64 178 78"></path>
+          <path class="b-motion" d="M184 46 Q194 64 186 84"></path>
+          <path class="b-motion" d="M24 52 Q16 64 22 78"></path>
+          <path class="b-motion" d="M16 46 Q6 64 14 84"></path>
+        </g>
+        <g class="b-prop b-prop-point">
+          <path class="b-motion" d="M58 96 L48 100"></path>
+          <path class="b-motion" d="M58 104 L50 112"></path>
+          <path class="b-motion" d="M142 96 L152 100"></path>
+          <path class="b-motion" d="M142 104 L150 112"></path>
+        </g>
+        <g transform="translate(176 78)"><g class="b-prop b-prop-kiss">
+          <path class="b-kiss kh1" d="M0 6 C-1.5 4.5 -9 0.5 -9 -4 C-9 -8 -5 -9.5 0 -5 C5 -9.5 9 -8 9 -4 C9 0.5 1.5 4.5 0 6 Z"></path>
+          <path class="b-kiss kh2" d="M0 6 C-1.5 4.5 -9 0.5 -9 -4 C-9 -8 -5 -9.5 0 -5 C5 -9.5 9 -8 9 -4 C9 0.5 1.5 4.5 0 6 Z"></path>
+          <path class="b-kiss kh3" d="M0 6 C-1.5 4.5 -9 0.5 -9 -4 C-9 -8 -5 -9.5 0 -5 C5 -9.5 9 -8 9 -4 C9 0.5 1.5 4.5 0 6 Z"></path>
+        </g></g>
+      </g></g></g>
+    </svg>
+  </template>
+
+  <script src="script.js"></script>
+</body>
+</html>
