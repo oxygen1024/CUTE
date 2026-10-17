@@ -36,13 +36,9 @@
      *  sticker  – emoji stuck on the corner of the photo in the final picture
      */
     actions: [
-      { pose: "raise-right", emoji: "🙋", title: "Raise your RIGHT hand", hint: "Reach up high — like you know the answer!", seconds: 5, caption: "Pick me!", sticker: "✋" },
-      { pose: "raise-left", emoji: "🙋", title: "Raise your LEFT hand", hint: "Now the other one — nice and high!", seconds: 5, caption: "Me again~", sticker: "🙌" },
       { pose: "wave", emoji: "👋", title: "Wave BOTH hands", hint: "Say hi to the camera!", seconds: 5, caption: "Hiii cutie!", sticker: "👋" },
       { pose: "heart", emoji: "❤️", title: "Make a heart with both hands", hint: "Hold it in front of you", seconds: 5, caption: "My heart", sticker: "💗" },
-      { pose: "point", emoji: "👉", title: "Point both index fingers at your face", hint: "Who, me? 👉😊👈", seconds: 5, caption: "Who, me?", sticker: "🥺" },
-      { pose: "smile", emoji: "😁", title: "Smile at the camera", hint: "Your biggest smile!", seconds: 4, caption: "So happy", sticker: "✨" },
-      { pose: "kiss", emoji: "😘", title: "Blow a kiss to the camera", hint: "Mwah!", seconds: 4, caption: "Mwah!", sticker: "💋" },
+      { pose: "kiss", emoji: "😘", title: "Blow a kiss to the camera", hint: "Mwah!", seconds: 5, caption: "Mwah!", sticker: "💋" },
       { pose: "cup", emoji: "🥺", title: "Hold your face with both hands", hint: "Make your cutest face!", seconds: 5, caption: "Too cute!", sticker: "🌸" },
     ],
 
@@ -1150,23 +1146,35 @@
       this.canvas.width = W;
       this.canvas.height = H;
 
-      // grid: every photo + one "Gotcha!" badge cell
-      const cells = photos.length + 1;
+      // Two layouts are tried and the one with the biggest photos wins:
+      //  "cell":   photos + the "Gotcha!" badge share one grid (e.g. 8 photos → 3×3)
+      //  "banner": photos fill a full grid, the badge is a banner below it (e.g. 4 photos → 2×2)
+      const n = photos.length;
       const area = { x: W * 0.04, y: H * 0.175, w: W * 0.92, h: H * 0.765 };
-      let best = null;
-      for (let cols = 1; cols <= cells; cols++) {
-        const rows = Math.ceil(cells / cols);
-        const L = this.layoutCard((area.w / cols) * 0.9, (area.h / rows) * 0.9);
-        if (!best || L.pw > best.L.pw) best = { cols, rows, L };
-      }
-      const { cols, rows, L } = best;
+      const bannerH = H * 0.12;
+      const fit = (cells, areaH, exact) => {
+        let best = null;
+        for (let cols = 1; cols <= cells; cols++) {
+          const rows = Math.ceil(cells / cols);
+          if (exact && (cols * rows !== cells || cols < 2)) continue;
+          const L = this.layoutCard((area.w / cols) * 0.9, (areaH / rows) * 0.9);
+          if (!best || L.pw > best.L.pw) best = { cols, rows, L, areaH };
+        }
+        return best;
+      };
+      const asCell = fit(n + 1, area.h, false);
+      const asBanner = n >= 2 ? fit(n, area.h - bannerH - H * 0.02, true) : null;
+      const useBanner = !!asBanner && asBanner.L.pw >= asCell.L.pw;
+      const { cols, rows, L, areaH } = useBanner ? asBanner : asCell;
+      const cells = useBanner ? n : n + 1;
       this.card = L;
       const cellW = area.w / cols;
-      const cellH = Math.min(area.h / rows, L.h / 0.86);
+      const cellH = Math.min(areaH / rows, L.h / 0.86);
       const gridH = cellH * rows;
-      const top = area.y + (area.h - gridH) / 2;
-      // put the badge in the middle when the grid has a centre cell, else last
-      const badgeIndex = cols % 2 === 1 && rows % 2 === 1 && cols * rows === cells ? Math.floor(cells / 2) : cells - 1;
+      const blockH = gridH + (useBanner ? bannerH + H * 0.02 : 0);
+      const top = area.y + (area.h - blockH) / 2;
+      // in "cell" mode the badge takes the centre cell if there is one, else the last
+      const badgeIndex = useBanner ? -1 : cols % 2 === 1 && rows % 2 === 1 && cols * rows === cells ? Math.floor(cells / 2) : cells - 1;
       this.slots = [];
       for (let i = 0; i < cells; i++) {
         const col = i % cols;
@@ -1181,15 +1189,22 @@
         });
       }
 
-      // timing of the build-up animation
-      this.order = this.slots.map((s, i) => i).filter((i) => !this.slots[i].badge);
-      this.cardAt = (k) => 0.75 + k * 0.24;
-      this.badgeAt = this.cardAt(this.order.length) + 0.2;
-      this.total = this.badgeAt + 0.7;
-
       this.prerenderBackground();
       this.cards = photos.map((p) => this.prerenderPhotoCard(p));
-      this.badge = this.prerenderBadge();
+      if (useBanner) {
+        this.badge = this.prerenderBanner(W * 0.86, bannerH);
+        this.badgePos = { x: W / 2, y: top + gridH + H * 0.02 + bannerH / 2, rot: -0.03 };
+      } else {
+        this.badge = this.prerenderBadge();
+        const b = this.slots[badgeIndex];
+        this.badgePos = { x: b.x, y: b.y, rot: -0.06 };
+      }
+
+      // timing of the build-up animation
+      this.order = this.slots.map((sl, i) => i).filter((i) => !this.slots[i].badge);
+      this.cardAt = (k) => 0.75 + k * 0.28;
+      this.badgeAt = this.cardAt(this.order.length) + 0.2;
+      this.total = this.badgeAt + 0.7;
     }
 
     layoutCard(maxW, maxH) {
@@ -1329,27 +1344,42 @@
       g.stroke();
       g.setLineDash([]);
 
-      // a little cat face
+      this.drawBadgeCat(g, x + L.w / 2, y + L.h * 0.36, Math.min(L.w, L.h) * 0.2);
       const cx = x + L.w / 2;
-      const cy = y + L.h * 0.36;
-      const r = Math.min(L.w, L.h) * 0.2;
+
+      // text
+      g.textAlign = "center";
+      g.textBaseline = "middle";
       g.fillStyle = "#ffffff";
+      g.shadowColor = "rgba(160,10,80,0.55)";
+      g.shadowBlur = 10;
+      fitFont(g, P.gotcha, `400 {s}px "Pacifico", ${EMOJI_FONTS}, cursive`, L.w * 0.2, L.w * 0.86);
+      g.fillText(P.gotcha, cx, y + L.h * 0.7);
+      fitFont(g, P.gotchaSub, `700 {s}px "Fredoka", ${EMOJI_FONTS}, sans-serif`, L.w * 0.085, L.w * 0.86);
+      g.fillText(P.gotchaSub, cx, y + L.h * 0.86);
+      return c;
+    }
+
+    /** A little white cartoon cat face (used on the "Gotcha!" badge). */
+    drawBadgeCat(g, cx, cy, r) {
+      g.save();
       for (const side of [-1, 1]) {
+        g.fillStyle = "#ffffff";
         g.beginPath();
         g.moveTo(cx + side * r * 0.95, cy - r * 0.15);
         g.lineTo(cx + side * r * 0.85, cy - r * 1.25);
         g.lineTo(cx + side * r * 0.25, cy - r * 0.85);
         g.closePath();
         g.fill();
-        g.beginPath();
         g.fillStyle = "#ffb3d4";
+        g.beginPath();
         g.moveTo(cx + side * r * 0.8, cy - r * 0.4);
         g.lineTo(cx + side * r * 0.76, cy - r * 1.0);
         g.lineTo(cx + side * r * 0.42, cy - r * 0.8);
         g.closePath();
         g.fill();
-        g.fillStyle = "#ffffff";
       }
+      g.fillStyle = "#ffffff";
       g.beginPath();
       g.arc(cx, cy, r, 0, Math.PI * 2);
       g.fill();
@@ -1377,17 +1407,48 @@
       g.lineTo(cx, cy + r * 0.26);
       g.closePath();
       g.fill();
+      g.restore();
+    }
 
-      // text
+    /** Wide "Gotcha!" ribbon used under a full grid of photos. */
+    prerenderBanner(bw, bh) {
+      const P = CONFIG.picture;
+      const pad = Math.round(bh * 0.3);
+      const c = document.createElement("canvas");
+      c.width = Math.round(bw + pad * 2);
+      c.height = Math.round(bh + pad * 2);
+      const g = c.getContext("2d");
+      const x = pad;
+      const y = pad;
+      g.save();
+      g.shadowColor = "rgba(150, 20, 80, 0.35)";
+      g.shadowBlur = pad * 0.8;
+      g.shadowOffsetY = pad * 0.2;
+      const grad = g.createLinearGradient(x, y, x + bw, y + bh);
+      grad.addColorStop(0, "#ff7eb6");
+      grad.addColorStop(1, "#ff4f9a");
+      g.fillStyle = grad;
+      roundRectPath(g, x, y, bw, bh, bh / 2);
+      g.fill();
+      g.restore();
+      g.lineWidth = bh * 0.035;
+      g.strokeStyle = "#ffffff";
+      g.setLineDash([bh * 0.09, bh * 0.06]);
+      roundRectPath(g, x + bh * 0.08, y + bh * 0.08, bw - bh * 0.16, bh - bh * 0.16, bh / 2);
+      g.stroke();
+      g.setLineDash([]);
+      // cat faces on both ends
+      const r = bh * 0.27;
+      [x + bh * 0.62, x + bw - bh * 0.62].forEach((cx) => this.drawBadgeCat(g, cx, y + bh * 0.56, r));
       g.textAlign = "center";
       g.textBaseline = "middle";
       g.fillStyle = "#ffffff";
       g.shadowColor = "rgba(160,10,80,0.55)";
       g.shadowBlur = 10;
-      fitFont(g, P.gotcha, `400 {s}px "Pacifico", ${EMOJI_FONTS}, cursive`, L.w * 0.2, L.w * 0.86);
-      g.fillText(P.gotcha, cx, y + L.h * 0.7);
-      fitFont(g, P.gotchaSub, `700 {s}px "Fredoka", ${EMOJI_FONTS}, sans-serif`, L.w * 0.085, L.w * 0.86);
-      g.fillText(P.gotchaSub, cx, y + L.h * 0.86);
+      fitFont(g, P.gotcha, `400 {s}px "Pacifico", ${EMOJI_FONTS}, cursive`, bh * 0.42, bw - bh * 2.6);
+      g.fillText(P.gotcha, x + bw / 2, y + bh * 0.4);
+      fitFont(g, P.gotchaSub, `700 {s}px "Fredoka", ${EMOJI_FONTS}, sans-serif`, bh * 0.19, bw - bh * 2.6);
+      g.fillText(P.gotchaSub, x + bw / 2, y + bh * 0.78);
       return c;
     }
 
@@ -1526,10 +1587,10 @@
 
       const kb = k(this.badgeAt, 0.4);
       if (kb > 0) {
-        const s = this.slots.find((sl) => sl.badge);
+        const bp = this.badgePos;
         g.save();
-        g.translate(s.x, s.y);
-        g.rotate(-0.06);
+        g.translate(bp.x, bp.y);
+        g.rotate(bp.rot);
         const sc = 2.2 - 1.2 * ease.outBack(kb); // stamp: big → normal
         g.scale(sc, sc);
         g.globalAlpha = clamp(kb * 2, 0, 1);

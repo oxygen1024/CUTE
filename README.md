@@ -36,12 +36,12 @@ tools/
 
 1. **歡迎畫面** —「Can You Follow My Moves?」+ START 掣（唔會透露 Prank）
 2. **同意視窗** — 清楚講明會用前置鏡頭、每個動作影一張相、最後會砌成一張相播返、所有嘢只留喺 Browser、唔會錄聲
-3. **動作挑戰** — 卡通人物示範 8 個動作；每個動作前 3 秒倒數，做動作期間圓圈倒數到「📸」就自動影相（白光 + 快門聲），下面相片列即時顯示縮圖；全程自動跳下一個
+3. **動作挑戰** — 卡通人物示範 4 個動作（揮手、比心、飛吻、托腮扮可愛）；每個動作前 3 秒倒數，做動作期間圓圈倒數到「📸」就自動影相（白光 + 快門聲），下面相片列即時顯示縮圖；全程自動跳下一個
 4. **完成** —「Challenge Complete!」→「Preparing Your Results...」（同時喺本機搵塊面，計貓耳位置）→ 柔和粉紅閃光
 5. **可愛大相**（粉紅背景 + 波點 + 貓爪印 + 愛心 + 閃閃）：
    - 「Surprise! 💘」+「POV: You just fell in love 💗」
    - 每個手勢一格拍立得相，逐格「啵」一聲彈出嚟；每張相都戴住**突出相框嘅粉紅貓耳**、貓鼻、鬚、腮紅，下面有手寫字幕，角落有貼紙
-   - 最後中間蓋一個「Gotcha! 💕」貓貓徽章 + 一聲「nya~」
+   - 最後蓋一個「Gotcha! 💕」貓貓徽章 / 橫額 + 一聲「nya~」
    - 超可愛音樂一直 loop
 6. **Watch Again / Try Again / Save My Picture**
 
@@ -134,15 +134,17 @@ faceDetection: {
 
 ```js
 actions: [
-  { pose: "raise-right", emoji: "🙋", title: "Raise your RIGHT hand", hint: "Reach up high — like you know the answer!", seconds: 5, caption: "Pick me!",    sticker: "✋" },
-  { pose: "raise-left",  emoji: "🙋", title: "Raise your LEFT hand",  hint: "Now the other one — nice and high!",       seconds: 5, caption: "Me again~",   sticker: "🙌" },
-  { pose: "wave",        emoji: "👋", title: "Wave BOTH hands",       hint: "Say hi to the camera!",                    seconds: 5, caption: "Hiii cutie!", sticker: "👋" },
-  { pose: "heart",       emoji: "❤️", title: "Make a heart with both hands", hint: "Hold it in front of you",           seconds: 5, caption: "My heart",    sticker: "💗" },
-  { pose: "point",       emoji: "👉", title: "Point both index fingers at your face", hint: "Who, me? 👉😊👈",          seconds: 5, caption: "Who, me?",    sticker: "🥺" },
-  { pose: "smile",       emoji: "😁", title: "Smile at the camera",   hint: "Your biggest smile!",                      seconds: 4, caption: "So happy",    sticker: "✨" },
-  { pose: "kiss",        emoji: "😘", title: "Blow a kiss to the camera", hint: "Mwah!",                                seconds: 4, caption: "Mwah!",       sticker: "💋" },
-  { pose: "cup",         emoji: "🥺", title: "Hold your face with both hands", hint: "Make your cutest face!",          seconds: 5, caption: "Too cute!",   sticker: "🌸" },
+  { pose: "wave",  emoji: "👋", title: "Wave BOTH hands",                hint: "Say hi to the camera!",   seconds: 5, caption: "Hiii cutie!", sticker: "👋" },
+  { pose: "heart", emoji: "❤️", title: "Make a heart with both hands",   hint: "Hold it in front of you", seconds: 5, caption: "My heart",    sticker: "💗" },
+  { pose: "kiss",  emoji: "😘", title: "Blow a kiss to the camera",      hint: "Mwah!",                   seconds: 5, caption: "Mwah!",       sticker: "💋" },
+  { pose: "cup",   emoji: "🥺", title: "Hold your face with both hands", hint: "Make your cutest face!",  seconds: 5, caption: "Too cute!",   sticker: "🌸" },
 ],
+```
+
+想加返其他動作，例如舉手：
+
+```js
+  { pose: "raise-right", emoji: "🙋", title: "Raise your RIGHT hand", hint: "Reach up high!", seconds: 5, caption: "Pick me!", sticker: "✋" },
 ```
 
 | 欄位 | 用途 |
@@ -171,7 +173,7 @@ actions: [
 
 > 💡 鏡頭畫面同相片都係「鏡像」（好似照鏡），所以卡通人物喺畫面**右邊**舉手 = 用戶舉**右手**，用戶跟住做會好自然。
 > 想加全新動作：喺 `style.css` 嘅 *Cartoon buddy* 部分仿照現有 `.buddy[data-pose="…"]` 加一組關節角度（`--sr-sh` 右肩、`--sr-el` 右手肘、`--sl-sh` 左肩、`--sl-el` 左手肘、`--sr-wr`/`--sl-wr` 手腕）。
-> 動作數量唔一定要 8 個；大相會自動排版（8 張相 + 1 個徽章 = 3×3）。
+> 動作數量可以自由加減；大相會自動揀相片最大嘅排版（例如 4 張相 = 2×2 + 底部「Gotcha!」橫額；8 張相 = 3×3，中間係徽章）。
 
 ---
 
@@ -201,7 +203,7 @@ picture: {
   width: 1080,                                  // 相嘅闊度（高度自動：手機相 2:3、電腦相 4:5）
   title: "Surprise! 💘",                        // 頂部大標題
   subtitle: "POV: You just fell in love 💗",    // 標題下面
-  gotcha: "Gotcha! 💕",                         // 中間徽章大字
+  gotcha: "Gotcha! 💕",                         // 徽章 / 橫額大字
   gotchaSub: "You're so adorable!",             // 徽章細字
   footer: "💗 Can You Follow My Moves? 💗",     // 底部細字
 },
