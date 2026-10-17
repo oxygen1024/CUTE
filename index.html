@@ -138,7 +138,7 @@
 
       <div class="reveal-inner">
         <header class="reveal-top">
-          <h2 id="reveal-title" class="visually-hidden">Your photo show</h2>
+          <h2 id="reveal-title" class="visually-hidden">Your cute picture</h2>
           <div class="sound-controls" id="sound-controls">
             <button id="btn-mute" class="icon-btn" type="button" aria-label="Mute music" aria-pressed="false">🔊</button>
             <input id="volume" class="volume" type="range" min="0" max="1" step="0.05" value="0.8" aria-label="Music volume">
@@ -147,7 +147,8 @@
 
         <div class="show-stage">
           <div class="show-frame" id="show-frame">
-            <canvas id="show-canvas" aria-label="Animated show made from your photos"></canvas>
+            <canvas id="picture-canvas" aria-hidden="true"></canvas>
+            <img id="picture-img" class="picture-img" alt="A cute pink picture of all your poses with cat ears" hidden>
             <button id="btn-play-surprise" class="play-surprise" type="button" hidden>
               <span class="play-icon" aria-hidden="true">▶</span> Play Surprise 💗
             </button>
@@ -161,10 +162,10 @@
           <div class="action-row">
             <button id="btn-watch-again" class="love-btn" type="button">🔁 Watch Again</button>
             <button id="btn-try-again" class="love-btn" type="button">🎮 Try Again</button>
-            <button id="btn-save" class="love-btn love-btn-primary" type="button">💾 Save My Video</button>
+            <button id="btn-save" class="love-btn love-btn-primary" type="button">💾 Save My Picture</button>
           </div>
-          <button id="btn-save-collage" class="link-btn" type="button">🖼️ Save Photo Collage</button>
           <p id="save-status" class="save-status" role="status"></p>
+          <p class="save-hint">Tip: you can also long-press (or right-click) the picture to save it.</p>
         </div>
 
         <p class="privacy-note">🔒 Your photos stay on this device — nothing was uploaded.</p>
@@ -182,7 +183,7 @@
       <p class="modal-lead">This challenge uses your <strong>front camera</strong>. Before we start:</p>
       <ul class="consent-list">
         <li><span aria-hidden="true">📸</span><span>We will <strong>take one photo of you during each move</strong> (<span class="js-photo-count">8</span> photos, about <span class="js-total-time">1 minute</span>).</span></li>
-        <li><span aria-hidden="true">▶️</span><span>Your photos will be <strong>shown back to you as a short animation</strong> when the challenge is complete.</span></li>
+        <li><span aria-hidden="true">🖼️</span><span>Your photos will be <strong>shown back to you as one picture</strong> when the challenge is complete.</span></li>
         <li><span aria-hidden="true">🔒</span><span>Everything stays <strong>inside this browser</strong>. Nothing is uploaded to any server.</span></li>
         <li><span aria-hidden="true">🗑️</span><span>The photos are gone when you restart or close the page — unless you choose to save them.</span></li>
         <li><span aria-hidden="true">🔇</span><span>No sound is recorded — the microphone is never used.</span></li>
@@ -210,33 +211,12 @@
     </div>
   </div>
 
-  <!-- ============================================================
-       SAVE FALLBACK DIALOG (browser can't build the video file)
-       ============================================================ -->
-  <div id="save-modal" class="modal modal-love" role="dialog" aria-modal="true" aria-labelledby="save-title" hidden>
-    <div class="modal-card">
-      <div class="big-icon" aria-hidden="true">💌</div>
-      <h2 id="save-title">Saving the video isn't supported here</h2>
-      <p class="modal-lead" id="save-reason">This browser can't turn your photo animation into a video file.</p>
-      <p><strong>You can still keep the moment:</strong></p>
-      <ul class="tips">
-        <li>🖼️ <strong>Save the Photo Collage</strong> — all your photos on one pink picture with hearts and captions.</li>
-        <li>📱 <strong>Screen-record it:</strong> start your device's screen recorder, then tap <em>Watch Again</em>.
-          <br><small>iPhone: Control Centre → Screen Recording · Android: Quick Settings → Screen record · Mac: ⌘ Shift 5 · Windows: Win + Alt + R</small></li>
-        <li>💻 Open this page in the latest <strong>Chrome, Edge, Firefox or Safari</strong> to save the full video.</li>
-      </ul>
-      <div class="modal-actions">
-        <button id="btn-save-close" class="btn-ghost" type="button">Close</button>
-        <button id="btn-save-photo" class="btn-primary" type="button">🖼️ Save Photo Collage</button>
-      </div>
-    </div>
-  </div>
-
   <div id="flash" class="flash" aria-hidden="true"></div>
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
   <!-- Background music (the file is set in script.js → CONFIG.music.src) -->
   <audio id="music" preload="auto" loop></audio>
+  <audio id="meow" preload="auto"></audio>
 
   <!-- Cartoon buddy used for the move demonstrations (cloned by script.js) -->
   <template id="buddy-template">

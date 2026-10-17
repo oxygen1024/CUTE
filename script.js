@@ -2,11 +2,12 @@
    Prank Website – script.js
    --------------------------------------------------------------------------
    Flow: Welcome → consent → camera → move challenge (1 photo per move) →
-         "Challenge Complete!" → pink flash → photo show (your photos animated
-         together on a pink background with funny cartoon music) →
-         Watch Again / Try Again / Save My Video.
+         "Challenge Complete!" → pink flash → ONE cute picture: every pose
+         joined together on a pink background, each with cat ears, while
+         very cute music plays → Watch Again / Try Again / Save My Picture.
 
    Privacy: photos only ever live in this browser's memory (canvas elements).
+   Face detection (for placing the cat ears) runs locally in the browser.
    Nothing is uploaded anywhere.
    ========================================================================== */
 (() => {
@@ -31,16 +32,16 @@
     /**
      * The moves, in order. One photo is taken for each move.
      *  pose     – cartoon demo (raise-right, raise-left, wave, heart, point, smile, kiss, cup)
-     *  caption  – text written under the photo in the final animation
-     *  sticker  – emoji that pops next to the photo in the final animation
+     *  caption  – text written under the photo in the final picture
+     *  sticker  – emoji stuck on the corner of the photo in the final picture
      */
     actions: [
-      { pose: "raise-right", emoji: "🙋", title: "Raise your RIGHT hand", hint: "Reach up high — like you know the answer!", seconds: 5, caption: "Pick me, pick me!", sticker: "✋" },
-      { pose: "raise-left", emoji: "🙋", title: "Raise your LEFT hand", hint: "Now the other one — nice and high!", seconds: 5, caption: "Me again, hehe", sticker: "🙌" },
+      { pose: "raise-right", emoji: "🙋", title: "Raise your RIGHT hand", hint: "Reach up high — like you know the answer!", seconds: 5, caption: "Pick me!", sticker: "✋" },
+      { pose: "raise-left", emoji: "🙋", title: "Raise your LEFT hand", hint: "Now the other one — nice and high!", seconds: 5, caption: "Me again~", sticker: "🙌" },
       { pose: "wave", emoji: "👋", title: "Wave BOTH hands", hint: "Say hi to the camera!", seconds: 5, caption: "Hiii cutie!", sticker: "👋" },
-      { pose: "heart", emoji: "❤️", title: "Make a heart with both hands", hint: "Hold it in front of you", seconds: 5, caption: "Here's my heart", sticker: "💗" },
+      { pose: "heart", emoji: "❤️", title: "Make a heart with both hands", hint: "Hold it in front of you", seconds: 5, caption: "My heart", sticker: "💗" },
       { pose: "point", emoji: "👉", title: "Point both index fingers at your face", hint: "Who, me? 👉😊👈", seconds: 5, caption: "Who, me?", sticker: "🥺" },
-      { pose: "smile", emoji: "😁", title: "Smile at the camera", hint: "Your biggest smile!", seconds: 4, caption: "Smiling for you", sticker: "✨" },
+      { pose: "smile", emoji: "😁", title: "Smile at the camera", hint: "Your biggest smile!", seconds: 4, caption: "So happy", sticker: "✨" },
       { pose: "kiss", emoji: "😘", title: "Blow a kiss to the camera", hint: "Mwah!", seconds: 4, caption: "Mwah!", sticker: "💋" },
       { pose: "cup", emoji: "🥺", title: "Hold your face with both hands", hint: "Make your cutest face!", seconds: 5, caption: "Too cute!", sticker: "🌸" },
     ],
@@ -48,45 +49,48 @@
     /** "Preparing Your Results..." loading time (seconds). */
     loadingSeconds: 2,
 
-    /** Music for the photo show. Replace the file to change the song. */
+    /** Very cute background music (loops while the picture is shown). */
     music: {
-      src: "assets/funny.mp3",
+      src: "assets/cute.mp3",
       volume: 0.8, // starting volume (0–1)
-      videoVolume: 0.9, // music level inside the downloaded video (0–1)
-      fadeOutSeconds: 1.2,
     },
 
-    /**
-     * The final photo animation. Times are in seconds. The default music is
-     * 120 BPM (1 bar = 2 s) and is written so every photo lands on a bar.
-     */
-    show: {
-      bpm: 120,
-      introSeconds: 2, // "Surprise!" title
-      photoSeconds: 2, // each photo pops in with a cartoon animation
-      flipbookSeconds: 4, // all photos flicker in order like a stop-motion dance
-      flipbookFrameSeconds: 0.25,
-      finaleSeconds: 4, // collage of all photos + "Gotcha!" stamp
-      outroSeconds: 2,
+    /** Little "nya~" when the picture is complete (set enabled: false to turn off). */
+    meow: { src: "assets/meow.mp3", enabled: true },
+
+    /** Cat filter drawn on every photo. */
+    catFace: {
+      ears: true,
+      nose: true, // needs face detection
+      whiskers: true, // needs face detection
+      blush: true, // needs face detection
+      earColor: "#ffd3e6",
+      earOutline: "#ff7eb6",
+      earInner: "#ff5fa2",
+    },
+
+    /** Face detection (MediaPipe, runs locally) so the ears sit on the head. */
+    faceDetection: {
+      enabled: true,
+      path: "assets/vendor/mediapipe/",
+      minConfidence: 0.4,
+      maxWaitSeconds: 6, // extra time allowed at the end if it is still loading
+    },
+
+    /** The final picture (height is automatic: 2:3 for phone photos, 4:5 for webcam photos). */
+    picture: {
+      width: 1080,
       title: "Surprise! 💘",
-      introCaption: "POV: You just fell in love 💗",
-      flipbookCaption: "Look how cute you are!",
-      finaleCaption: "You're so adorable!",
+      subtitle: "POV: You just fell in love 💗",
       gotcha: "Gotcha! 💕",
-      gotchaSub: "You just got pranked 😘",
+      gotchaSub: "You're so adorable!",
       footer: "💗 Can You Follow My Moves? 💗",
     },
 
-    /** Longest side of each photo in pixels. */
-    photo: { maxSize: 960 },
-
-    /** Downloaded video. */
-    composite: { fps: 30, videoBitsPerSecond: 4_000_000 },
-
-    /** Small beeps & shutter sound during the challenge (Web Audio, no files). */
+    /** Small beeps, shutter and pop sounds (Web Audio, no files). */
     beeps: true,
 
-    downloadName: "my-prank-show",
+    downloadName: "my-cute-picture",
   };
 
   /* ========================================================================
@@ -138,20 +142,17 @@
     btnMute: $("btn-mute"),
     volume: $("volume"),
     showFrame: $("show-frame"),
-    showCanvas: $("show-canvas"),
+    pictureCanvas: $("picture-canvas"),
+    pictureImg: $("picture-img"),
     btnPlaySurprise: $("btn-play-surprise"),
     actions: $("reveal-actions"),
     btnWatchAgain: $("btn-watch-again"),
     btnTryAgain: $("btn-try-again"),
     btnSave: $("btn-save"),
-    btnSaveCollage: $("btn-save-collage"),
     saveStatus: $("save-status"),
-    saveModal: $("save-modal"),
-    saveReason: $("save-reason"),
-    btnSaveClose: $("btn-save-close"),
-    btnSavePhoto: $("btn-save-photo"),
     toast: $("toast"),
     music: $("music"),
+    meow: $("meow"),
     buddyTemplate: $("buddy-template"),
   };
 
@@ -164,30 +165,21 @@
   const IS_IN_APP = /FBAN|FBAV|Instagram|Line\/|MicroMessenger|WhatsApp|Snapchat|TikTok|musical_ly/i.test(UA);
   const REDUCED_MOTION = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
-  // The downloadable video prefers MP4 (plays everywhere & uploads to social apps).
-  const COMPOSITE_TYPES = [
-    "video/mp4;codecs=avc1.42E01E,mp4a.40.2",
-    "video/mp4;codecs=avc1,mp4a.40.2",
-    "video/mp4",
-    "video/webm;codecs=vp9,opus",
-    "video/webm;codecs=vp8,opus",
-    "video/webm",
-  ];
-
   const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
   const rand = (min, max) => min + Math.random() * (max - min);
   const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
   const clamp = (v, min, max) => Math.min(max, Math.max(min, v));
-  const isMp4 = (mime) => /mp4/i.test(mime || "");
 
-  function pickMimeType(candidates) {
-    if (!window.MediaRecorder || typeof MediaRecorder.isTypeSupported !== "function") return "";
-    for (const type of candidates) {
-      try {
-        if (MediaRecorder.isTypeSupported(type)) return type;
-      } catch (_) { /* ignore */ }
-    }
-    return "";
+  /** Small deterministic random generator so the picture's decorations are stable. */
+  function seededRandom(seed) {
+    let s = seed >>> 0;
+    return () => {
+      s = (s + 0x6d2b79f5) >>> 0;
+      let t = s;
+      t = Math.imul(t ^ (t >>> 15), t | 1);
+      t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
   }
 
   function withTimeout(promise, ms) {
@@ -208,18 +200,6 @@
     });
   }
 
-  function decodeAudio(ctx, arrayBuffer) {
-    // Supports both the promise and the older callback form (old Safari).
-    return new Promise((resolve, reject) => {
-      try {
-        const p = ctx.decodeAudioData(arrayBuffer, resolve, reject);
-        if (p && typeof p.then === "function") p.then(resolve, reject);
-      } catch (err) {
-        reject(err);
-      }
-    });
-  }
-
   function canSetMediaVolume() {
     try {
       const a = document.createElement("audio");
@@ -237,22 +217,20 @@
     phase: "welcome",
     stream: null,
     buddy: null,
-    photos: [], // [{ canvas, action, index }]
+    photos: [], // [{ canvas, action, index, face }]
     timeline: null,
     segIndex: -1,
     lastCount: -1,
     rafId: 0,
+    revealRaf: 0,
     wakeLock: null,
     audioCtx: null,
     musicOk: true,
-    musicBuffer: null,
-    musicBufferPromise: null,
     volume: CONFIG.music.volume,
     muted: false,
     volumeControllable: canSetMediaVolume(),
-    fadeTimer: 0,
-    endTimers: [],
-    saveRequested: false,
+    pictureBlob: null,
+    pictureURL: "",
     toastTimer: 0,
     sessionId: 0,
   };
@@ -315,7 +293,7 @@
   }
 
   /* ========================================================================
-     6. Audio (Web Audio context, beeps, music)
+     6. Audio (Web Audio context for little sounds, <audio> for music)
      ======================================================================== */
   function ensureAudioContext() {
     if (!state.audioCtx) {
@@ -332,14 +310,26 @@
     return ctx;
   }
 
-  async function resumeAudioContext(ms = 400) {
-    const ctx = state.audioCtx;
-    if (!ctx) return false;
-    if (ctx.state === "running") return true;
+  /** "Primes" an <audio> element with a muted play so it may play later without a tap. */
+  function primeMedia(el) {
+    if (!el || !el.getAttribute("src") || !el.paused) return;
     try {
-      await withTimeout(ctx.resume(), ms);
-    } catch (_) { /* ignore */ }
-    return ctx.state === "running";
+      el.muted = true;
+      const p = el.play();
+      if (p && typeof p.then === "function") {
+        p.then(() => {
+          if (state.phase !== "reveal") {
+            el.pause();
+            el.currentTime = 0;
+          }
+          el.muted = state.muted;
+        }).catch(() => {
+          el.muted = state.muted;
+        });
+      }
+    } catch (_) {
+      el.muted = state.muted;
+    }
   }
 
   /** Must be called inside a click/tap handler: unlocks audio on iOS/Safari. */
@@ -354,55 +344,11 @@
         src.start(0);
       } catch (_) { /* ignore */ }
     }
-    // "Prime" the <audio> element with a muted play so the browser allows it
-    // to play with sound later, when the show starts automatically.
-    const m = els.music;
-    if (state.musicOk && m.paused) {
-      try {
-        m.muted = true;
-        const p = m.play();
-        if (p && typeof p.then === "function") {
-          p.then(() => {
-            if (state.phase !== "reveal") {
-              m.pause();
-              m.currentTime = 0;
-            }
-            m.muted = state.muted;
-          }).catch(() => {
-            m.muted = state.muted;
-          });
-        }
-      } catch (_) {
-        m.muted = state.muted;
-      }
-    }
-    loadMusicBuffer();
+    if (state.musicOk) primeMedia(els.music);
+    if (CONFIG.meow.enabled) primeMedia(els.meow);
   }
 
-  /** Decodes the song into memory so it can be mixed into the downloadable video. */
-  function loadMusicBuffer() {
-    if (state.musicBufferPromise) return state.musicBufferPromise;
-    const ctx = state.audioCtx;
-    if (!ctx || !window.fetch) return Promise.resolve(null);
-    state.musicBufferPromise = fetch(CONFIG.music.src)
-      .then((r) => {
-        if (!r.ok) throw new Error(`HTTP ${r.status}`);
-        return r.arrayBuffer();
-      })
-      .then((buf) => decodeAudio(ctx, buf))
-      .then((audioBuffer) => {
-        state.musicBuffer = audioBuffer;
-        return audioBuffer;
-      })
-      .catch((err) => {
-        console.warn("[music] Could not load the song for the video export (open the site via http(s), not file://).", err);
-        state.musicBufferPromise = null;
-        return null;
-      });
-    return state.musicBufferPromise;
-  }
-
-  function beep(freq = 660, duration = 0.09, volume = 0.07, type = "sine") {
+  function tone(freq, duration, volume, type = "sine", sweepTo = 0) {
     if (!CONFIG.beeps) return;
     const ctx = state.audioCtx;
     if (!ctx || ctx.state !== "running") return;
@@ -412,6 +358,7 @@
       const gain = ctx.createGain();
       osc.type = type;
       osc.frequency.setValueAtTime(freq, t);
+      if (sweepTo) osc.frequency.exponentialRampToValueAtTime(sweepTo, t + duration);
       gain.gain.setValueAtTime(0.0001, t);
       gain.gain.exponentialRampToValueAtTime(volume, t + 0.012);
       gain.gain.exponentialRampToValueAtTime(0.0001, t + duration);
@@ -422,6 +369,8 @@
     } catch (_) { /* ignore */ }
   }
 
+  const beep = (freq = 660, duration = 0.09, volume = 0.07, type = "sine") => tone(freq, duration, volume, type);
+
   function goChime() {
     beep(880, 0.12, 0.07, "triangle");
     setTimeout(() => beep(1320, 0.16, 0.06, "triangle"), 90);
@@ -429,6 +378,13 @@
 
   function finishJingle() {
     [523, 659, 784, 1046].forEach((f, i) => setTimeout(() => beep(f, 0.18, 0.06, "triangle"), i * 110));
+  }
+
+  /** Cute bubbly "pop" when a photo lands in the picture. */
+  function popSound(i) {
+    if (state.muted) return;
+    const notes = [784, 880, 988, 1047, 1175, 1319, 1397, 1568, 1760];
+    tone(notes[i % notes.length] * 0.5, 0.12, 0.09, "sine", notes[i % notes.length] * 1.4);
   }
 
   function shutterSound() {
@@ -458,41 +414,25 @@
     } catch (_) { /* ignore */ }
   }
 
+  function playMeow() {
+    if (!CONFIG.meow.enabled || state.muted) return;
+    const m = els.meow;
+    try {
+      m.currentTime = 0;
+      const p = m.play();
+      if (p && p.catch) p.catch(() => {});
+    } catch (_) { /* ignore */ }
+  }
+
   function applyVolume() {
-    const m = els.music;
-    m.muted = state.muted;
-    if (state.volumeControllable) m.volume = state.volume;
+    [els.music, els.meow].forEach((m) => {
+      m.muted = state.muted;
+      if (state.volumeControllable) m.volume = state.volume;
+    });
     const silent = state.muted || state.volume === 0;
     els.btnMute.textContent = silent ? "🔇" : "🔊";
     els.btnMute.setAttribute("aria-pressed", String(state.muted));
     els.btnMute.setAttribute("aria-label", state.muted ? "Unmute music" : "Mute music");
-  }
-
-  function stopMusicFade() {
-    clearInterval(state.fadeTimer);
-    state.fadeTimer = 0;
-  }
-
-  function fadeOutMusic(seconds) {
-    const m = els.music;
-    stopMusicFade();
-    if (m.paused) return;
-    if (!state.volumeControllable) {
-      state.fadeTimer = setTimeout(() => m.pause(), seconds * 1000);
-      return;
-    }
-    const startVolume = m.volume;
-    const t0 = performance.now();
-    state.fadeTimer = setInterval(() => {
-      const k = (performance.now() - t0) / (seconds * 1000);
-      if (k >= 1) {
-        stopMusicFade();
-        m.pause();
-        m.volume = state.volume;
-        return;
-      }
-      m.volume = clamp(startVolume * (1 - k), 0, 1);
-    }, 50);
   }
 
   /* ========================================================================
@@ -615,6 +555,7 @@
     updatePanelAspect();
     video.addEventListener("resize", updatePanelAspect);
 
+    FaceAI.load(); // warm up face detection in the background while playing
     runChallenge();
   }
 
@@ -721,7 +662,7 @@
     const vw = v.videoWidth;
     const vh = v.videoHeight;
     if (!vw || !vh || v.readyState < 2) return false;
-    const scale = Math.min(1, CONFIG.photo.maxSize / Math.max(vw, vh));
+    const scale = Math.min(1, 960 / Math.max(vw, vh));
     const canvas = document.createElement("canvas");
     canvas.width = Math.round(vw * scale);
     canvas.height = Math.round(vh * scale);
@@ -734,7 +675,7 @@
       console.warn("[photo] could not capture", err);
       return false;
     }
-    state.photos.push({ canvas, action: CONFIG.actions[index], index });
+    state.photos.push({ canvas, action: CONFIG.actions[index], index, face: null });
 
     // feedback: flash, shutter sound, thumbnail
     restartAnimation(els.shutter, "is-on");
@@ -883,17 +824,20 @@
       return;
     }
 
+    const sessionId = state.sessionId;
     showScreen("complete");
     els.completeCard.classList.remove("is-loading");
     els.completeCard.style.setProperty("--load-dur", `${CONFIG.loadingSeconds}s`);
 
-    loadMusicBuffer();
-    const fontsReady = preloadFonts();
     await sleep(900);
+    if (sessionId !== state.sessionId) return;
     els.completeCard.classList.add("is-loading"); // "Preparing Your Results..."
-    await Promise.all([sleep(CONFIG.loadingSeconds * 1000), fontsReady]);
-    if (state.phase !== "complete") return;
-    Show.prepare(state.photos);
+    const minWait = sleep(CONFIG.loadingSeconds * 1000);
+    await Promise.all([minWait, preloadFonts(), withTimeout(FaceAI.load(), (CONFIG.loadingSeconds + CONFIG.faceDetection.maxWaitSeconds) * 1000)]);
+    if (sessionId !== state.sessionId || state.phase !== "complete") return;
+
+    findFaces(state.photos);
+    Picture.prepare(state.photos);
     pinkFlash(startReveal);
   }
 
@@ -910,7 +854,767 @@
   }
 
   /* ========================================================================
-     9. Transition + reveal screen
+     9. Face detection (local, MediaPipe) → where to put the cat ears
+     ======================================================================== */
+  const FaceAI = {
+    detector: null,
+    loading: null,
+
+    /** Loads the detector once; resolves to null if it can't (the ears then use a best guess). */
+    load() {
+      if (this.loading) return this.loading;
+      if (!CONFIG.faceDetection.enabled) {
+        this.loading = Promise.resolve(null);
+        return this.loading;
+      }
+      const base = new URL(CONFIG.faceDetection.path, location.href).href;
+      this.loading = import(`${base}vision_bundle.mjs`)
+        .then(async (mp) => {
+          const files = await mp.FilesetResolver.forVisionTasks(`${base}wasm`);
+          this.detector = await mp.FaceDetector.createFromOptions(files, {
+            baseOptions: { modelAssetPath: `${base}blaze_face_short_range.tflite`, delegate: "CPU" },
+            runningMode: "IMAGE",
+            minDetectionConfidence: CONFIG.faceDetection.minConfidence,
+          });
+          return this.detector;
+        })
+        .catch((err) => {
+          console.warn("[face] Face detection unavailable — cat ears will use a best guess.", err);
+          return null;
+        });
+      return this.loading;
+    },
+
+    /** Returns { M, d, theta, nose } for the biggest face in the canvas, or null. */
+    detect(canvas) {
+      if (!this.detector) return null;
+      try {
+        const res = this.detector.detect(canvas);
+        const list = (res && res.detections) || [];
+        let best = null;
+        list.forEach((det) => {
+          const b = det.boundingBox;
+          if (b && (!best || b.width * b.height > best.boundingBox.width * best.boundingBox.height)) best = det;
+        });
+        if (!best || !best.keypoints || best.keypoints.length < 3) return null;
+        const W = canvas.width;
+        const H = canvas.height;
+        const k = best.keypoints.map((p) => ({ x: p.x * W, y: p.y * H }));
+        const [a, b] = k[0].x < k[1].x ? [k[0], k[1]] : [k[1], k[0]];
+        const d = Math.hypot(b.x - a.x, b.y - a.y);
+        if (!(d > 4)) return null;
+        return {
+          M: { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 },
+          d,
+          theta: clamp(Math.atan2(b.y - a.y, b.x - a.x), -0.7, 0.7),
+          nose: k[2],
+          detected: true,
+        };
+      } catch (err) {
+        console.warn("[face] detection failed", err);
+        return null;
+      }
+    },
+  };
+
+  /** Finds the face in every photo; photos without a face borrow a sensible guess. */
+  function findFaces(photos) {
+    photos.forEach((p) => {
+      p.face = FaceAI.detect(p.canvas);
+    });
+    const found = photos.filter((p) => p.face);
+    photos.forEach((p) => {
+      if (p.face) return;
+      const W = p.canvas.width;
+      const H = p.canvas.height;
+      if (found.length) {
+        // average of the photos where a face was found (same camera, same person)
+        const avg = (fn) => found.reduce((s, q) => s + fn(q.face), 0) / found.length;
+        p.face = { M: { x: avg((f) => f.M.x), y: avg((f) => f.M.y) }, d: avg((f) => f.d), theta: 0, nose: null, detected: false };
+      } else {
+        const portrait = W < H;
+        p.face = { M: { x: W * 0.5, y: H * (portrait ? 0.36 : 0.38) }, d: W * (portrait ? 0.16 : 0.085), theta: 0, nose: null, detected: false };
+      }
+    });
+    console.info(`[face] found ${found.length}/${photos.length} faces`);
+  }
+
+  /**
+   * Draws the cat filter in photo coordinates.
+   * part = "ears" → only the ears; part = "face" → nose, whiskers, blush.
+   */
+  function drawCatFace(g, face, part) {
+    const cfg = CONFIG.catFace;
+    const { M, d, theta } = face;
+    const up = { x: Math.sin(theta), y: -Math.cos(theta) };
+    const rt = { x: Math.cos(theta), y: Math.sin(theta) };
+    const at = (u, r) => ({ x: M.x + up.x * u * d + rt.x * r * d, y: M.y + up.y * u * d + rt.y * r * d });
+
+    if (part === "ears" && cfg.ears) {
+      for (const side of [-1, 1]) {
+        const b = at(1.36, side * 0.98);
+        const h = 1.35 * d;
+        const w = 1.1 * d;
+        g.save();
+        g.translate(b.x, b.y);
+        g.rotate(theta + side * 0.38);
+        const ear = (s, dy) => {
+          g.beginPath();
+          g.moveTo((-w * s) / 2, dy);
+          g.quadraticCurveTo(-w * s * 0.42, -h * s * 0.62 + dy, -w * s * 0.07, -h * s * 0.97 + dy);
+          g.quadraticCurveTo(0, -h * s * 1.04 + dy, w * s * 0.07, -h * s * 0.97 + dy);
+          g.quadraticCurveTo(w * s * 0.42, -h * s * 0.62 + dy, (w * s) / 2, dy);
+          g.quadraticCurveTo(0, h * 0.16 * s + dy, (-w * s) / 2, dy);
+          g.closePath();
+        };
+        g.shadowColor = "rgba(120,20,70,0.35)";
+        g.shadowBlur = d * 0.25;
+        g.shadowOffsetY = d * 0.05;
+        ear(1, 0);
+        g.fillStyle = cfg.earColor;
+        g.fill();
+        g.shadowColor = "transparent";
+        g.lineWidth = d * 0.07;
+        g.strokeStyle = cfg.earOutline;
+        g.stroke();
+        ear(0.6, -h * 0.06);
+        const gr = g.createLinearGradient(0, -h, 0, 0);
+        gr.addColorStop(0, cfg.earInner);
+        gr.addColorStop(1, "#ff9cc8");
+        g.fillStyle = gr;
+        g.fill();
+        g.beginPath();
+        g.moveTo(-w * 0.3, -h * 0.25);
+        g.quadraticCurveTo(-w * 0.28, -h * 0.62, -w * 0.1, -h * 0.84);
+        g.lineWidth = d * 0.05;
+        g.lineCap = "round";
+        g.strokeStyle = "rgba(255,255,255,0.75)";
+        g.stroke();
+        g.restore();
+      }
+    }
+
+    if (part !== "face" || !face.detected) return; // nose/whiskers/blush need a real detection
+
+    if (cfg.blush) {
+      for (const side of [-1, 1]) {
+        const c = at(-0.62, side * 0.72);
+        g.save();
+        g.translate(c.x, c.y);
+        g.rotate(theta);
+        g.fillStyle = "rgba(255, 92, 150, 0.33)";
+        g.beginPath();
+        g.ellipse(0, 0, d * 0.3, d * 0.17, 0, 0, Math.PI * 2);
+        g.fill();
+        g.restore();
+      }
+    }
+
+    if (face.nose && (cfg.nose || cfg.whiskers)) {
+      const n = face.nose;
+      g.save();
+      g.translate(n.x + up.x * 0.02 * d, n.y + up.y * 0.02 * d);
+      g.rotate(theta);
+      if (cfg.nose) {
+        g.beginPath();
+        g.moveTo(-d * 0.15, -d * 0.07);
+        g.quadraticCurveTo(0, -d * 0.14, d * 0.15, -d * 0.07);
+        g.quadraticCurveTo(d * 0.05, d * 0.09, 0, d * 0.1);
+        g.quadraticCurveTo(-d * 0.05, d * 0.09, -d * 0.15, -d * 0.07);
+        g.closePath();
+        g.fillStyle = "#ff6f9f";
+        g.fill();
+        g.lineWidth = d * 0.03;
+        g.strokeStyle = "#d93d7a";
+        g.stroke();
+      }
+      if (cfg.whiskers) {
+        g.lineCap = "round";
+        for (const side of [-1, 1]) {
+          for (const a of [-0.18, 0, 0.18]) {
+            const sx = side * d * 0.42;
+            const sy = d * 0.08 + a * d * 0.25;
+            const ang = (side > 0 ? 0 : Math.PI) + a * side;
+            const ex = sx + Math.cos(ang) * d * 0.75;
+            const ey = sy + Math.sin(ang) * d * 0.75;
+            [
+              ["rgba(90,30,60,0.45)", d * 0.06],
+              ["#ffffff", d * 0.032],
+            ].forEach(([col, lw]) => {
+              g.beginPath();
+              g.moveTo(sx, sy);
+              g.quadraticCurveTo((sx + ex) / 2, (sy + ey) / 2 - d * 0.04, ex, ey);
+              g.strokeStyle = col;
+              g.lineWidth = lw;
+              g.stroke();
+            });
+          }
+        }
+      }
+      g.restore();
+    }
+  }
+
+  /* ========================================================================
+     10. The cute picture (Canvas): pink background + every pose with cat ears
+     ======================================================================== */
+  const EMOJI_FONTS = '"Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji"';
+  const HEART_COLORS = ["#ff2d87", "#ff4f9a", "#ff6fae", "#ff8fc1", "#ffc2dc", "#ffffff", "#e8457f", "#ffd1e6"];
+
+  function roundRectPath(ctx, x, y, w, h, r) {
+    const rr = Math.min(r, w / 2, h / 2);
+    ctx.beginPath();
+    ctx.moveTo(x + rr, y);
+    ctx.arcTo(x + w, y, x + w, y + h, rr);
+    ctx.arcTo(x + w, y + h, x, y + h, rr);
+    ctx.arcTo(x, y + h, x, y, rr);
+    ctx.arcTo(x, y, x + w, y, rr);
+    ctx.closePath();
+  }
+
+  function heartPath(ctx, cx, cy, size) {
+    const s = size / 32;
+    ctx.beginPath();
+    ctx.moveTo(cx, cy + 13 * s);
+    ctx.bezierCurveTo(cx - 1.4 * s, cy + 11.9 * s, cx - 15 * s, cy + 3.1 * s, cx - 15 * s, cy - 6 * s);
+    ctx.bezierCurveTo(cx - 15 * s, cy - 10.8 * s, cx - 11.2 * s, cy - 14.6 * s, cx - 6.6 * s, cy - 14.6 * s);
+    ctx.bezierCurveTo(cx - 3.8 * s, cy - 14.6 * s, cx - 1.4 * s, cy - 13.2 * s, cx, cy - 11.1 * s);
+    ctx.bezierCurveTo(cx + 1.4 * s, cy - 13.2 * s, cx + 3.8 * s, cy - 14.6 * s, cx + 6.6 * s, cy - 14.6 * s);
+    ctx.bezierCurveTo(cx + 11.2 * s, cy - 14.6 * s, cx + 15 * s, cy - 10.8 * s, cx + 15 * s, cy - 6 * s);
+    ctx.bezierCurveTo(cx + 15 * s, cy + 3.1 * s, cx + 1.4 * s, cy + 11.9 * s, cx, cy + 13 * s);
+    ctx.closePath();
+  }
+
+  function starPath(ctx, x, y, r) {
+    ctx.beginPath();
+    for (let i = 0; i < 8; i++) {
+      const rad = i % 2 === 0 ? r : r * 0.28;
+      const a = (Math.PI / 4) * i - Math.PI / 2;
+      ctx.lineTo(x + Math.cos(a) * rad, y + Math.sin(a) * rad);
+    }
+    ctx.closePath();
+  }
+
+  function pawPath(ctx, x, y, s, rot) {
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.rotate(rot);
+    ctx.beginPath();
+    ctx.ellipse(0, s * 0.25, s * 0.42, s * 0.34, 0, 0, Math.PI * 2);
+    [
+      [-0.42, -0.2],
+      [-0.15, -0.45],
+      [0.15, -0.45],
+      [0.42, -0.2],
+    ].forEach(([px, py]) => {
+      ctx.moveTo(px * s + s * 0.15, py * s);
+      ctx.ellipse(px * s, py * s, s * 0.15, s * 0.19, 0, 0, Math.PI * 2);
+    });
+    ctx.restore();
+  }
+
+  const ease = {
+    outBack(x) {
+      const c1 = 1.70158;
+      const c3 = c1 + 1;
+      return 1 + c3 * Math.pow(x - 1, 3) + c1 * Math.pow(x - 1, 2);
+    },
+  };
+
+  /** Sets ctx.font from a template like `700 {s}px Fredoka`, shrinking until it fits. */
+  function fitFont(ctx, text, template, maxSize, maxWidth) {
+    let size = Math.max(10, Math.round(maxSize));
+    ctx.font = template.replace("{s}", size);
+    while (size > 10 && ctx.measureText(text).width > maxWidth) {
+      size -= 2;
+      ctx.font = template.replace("{s}", size);
+    }
+    return size;
+  }
+
+  class PictureRenderer {
+    constructor(canvas) {
+      this.canvas = canvas;
+      this.ctx = canvas.getContext("2d");
+    }
+
+    setup(photos) {
+      this.photos = photos;
+      const p0 = photos[0].canvas;
+      const portrait = p0.width < p0.height;
+      this.tileAR = portrait ? 0.8 : 1; // photo window shape inside each card
+      const W = CONFIG.picture.width;
+      const H = Math.round(W * (portrait ? 1.5 : 1.25));
+      this.W = W;
+      this.H = H;
+      this.canvas.width = W;
+      this.canvas.height = H;
+
+      // grid: every photo + one "Gotcha!" badge cell
+      const cells = photos.length + 1;
+      const area = { x: W * 0.04, y: H * 0.175, w: W * 0.92, h: H * 0.765 };
+      let best = null;
+      for (let cols = 1; cols <= cells; cols++) {
+        const rows = Math.ceil(cells / cols);
+        const L = this.layoutCard((area.w / cols) * 0.9, (area.h / rows) * 0.9);
+        if (!best || L.pw > best.L.pw) best = { cols, rows, L };
+      }
+      const { cols, rows, L } = best;
+      this.card = L;
+      const cellW = area.w / cols;
+      const cellH = Math.min(area.h / rows, L.h / 0.86);
+      const gridH = cellH * rows;
+      const top = area.y + (area.h - gridH) / 2;
+      // put the badge in the middle when the grid has a centre cell, else last
+      const badgeIndex = cols % 2 === 1 && rows % 2 === 1 && cols * rows === cells ? Math.floor(cells / 2) : cells - 1;
+      this.slots = [];
+      for (let i = 0; i < cells; i++) {
+        const col = i % cols;
+        const row = Math.floor(i / cols);
+        const inRow = row === rows - 1 ? cells - row * cols : cols;
+        const offset = ((cols - inRow) * cellW) / 2; // centre a short last row
+        this.slots.push({
+          x: area.x + offset + col * cellW + cellW / 2,
+          y: top + row * cellH + cellH / 2,
+          rot: ((i * 7919) % 5 - 2) * 0.022,
+          badge: i === badgeIndex,
+        });
+      }
+
+      // timing of the build-up animation
+      this.order = this.slots.map((s, i) => i).filter((i) => !this.slots[i].badge);
+      this.cardAt = (k) => 0.75 + k * 0.24;
+      this.badgeAt = this.cardAt(this.order.length) + 0.2;
+      this.total = this.badgeAt + 0.7;
+
+      this.prerenderBackground();
+      this.cards = photos.map((p) => this.prerenderPhotoCard(p));
+      this.badge = this.prerenderBadge();
+    }
+
+    layoutCard(maxW, maxH) {
+      const bRatio = 0.055; // border relative to photo width
+      const stripRatio = 0.2; // caption strip relative to photo height
+      const ar = this.tileAR;
+      let pw = maxW / (1 + 2 * bRatio);
+      let ph = pw / ar;
+      if (ph * (1 + stripRatio) + pw * bRatio > maxH) {
+        ph = maxH / (1 + stripRatio + ar * bRatio);
+        pw = ph * ar;
+      }
+      const b = pw * bRatio;
+      const strip = ph * stripRatio;
+      return { pw, ph, b, strip, w: pw + 2 * b, h: ph + b + strip };
+    }
+
+    /** Crop window around the face, so every card shows the pose with room for the ears. */
+    cropFor(photo) {
+      const c = photo.canvas;
+      const W = c.width;
+      const H = c.height;
+      const ar = this.tileAR;
+      let cw;
+      let ch;
+      if (W / H < ar) {
+        cw = W;
+        ch = W / ar;
+      } else {
+        ch = H;
+        cw = H * ar;
+      }
+      const f = photo.face;
+      const fx = f.M.x;
+      const fy = f.M.y + f.d * 0.3;
+      return {
+        x: clamp(fx - cw / 2, 0, W - cw),
+        y: clamp(fy - ch * 0.47, 0, H - ch),
+        w: cw,
+        h: ch,
+      };
+    }
+
+    prerenderPhotoCard(photo) {
+      const L = this.card;
+      const pad = Math.round(L.w * 0.12);
+      const crop = this.cropFor(photo);
+      const s = L.pw / crop.w;
+      // The ears may pop out above the polaroid — make room for them.
+      const earTop = (photo.face.M.y - crop.y - 2.85 * photo.face.d) * s + L.b; // relative to card top
+      const padTop = Math.round(pad + clamp(-earTop, 0, L.h * 0.4));
+      const c = document.createElement("canvas");
+      c.width = Math.round(L.w + pad * 2);
+      c.height = Math.round(L.h + padTop + pad);
+      c.offsetY = (padTop - pad) / 2; // keeps the polaroid itself centred when drawn
+      const g = c.getContext("2d");
+      // white polaroid with soft shadow
+      g.save();
+      g.shadowColor = "rgba(150, 20, 80, 0.33)";
+      g.shadowBlur = pad * 0.6;
+      g.shadowOffsetY = pad * 0.18;
+      g.fillStyle = "#ffffff";
+      roundRectPath(g, pad, padTop, L.w, L.h, L.b * 0.8);
+      g.fill();
+      g.restore();
+      const toPhoto = () => {
+        g.translate(pad + L.b, padTop + L.b);
+        g.scale(s, s);
+        g.translate(-crop.x, -crop.y);
+      };
+      // photo + cat nose/whiskers/blush, clipped to the photo window
+      g.save();
+      roundRectPath(g, pad + L.b, padTop + L.b, L.pw, L.ph, L.b * 0.45);
+      g.clip();
+      toPhoto();
+      g.drawImage(photo.canvas, 0, 0);
+      drawCatFace(g, photo.face, "face");
+      g.restore();
+      // cat ears: not clipped, so they can pop out of the frame
+      g.save();
+      g.beginPath();
+      g.rect(pad - L.b, 0, L.w + 2 * L.b, padTop + L.b + L.ph);
+      g.clip();
+      toPhoto();
+      drawCatFace(g, photo.face, "ears");
+      g.restore();
+      // caption
+      const action = photo.action || {};
+      if (action.caption) {
+        g.fillStyle = "#ff2d87";
+        g.textAlign = "center";
+        g.textBaseline = "middle";
+        fitFont(g, action.caption, `400 {s}px "Pacifico", ${EMOJI_FONTS}, cursive`, L.strip * 0.5, L.pw * 0.92);
+        g.fillText(action.caption, c.width / 2, padTop + L.b + L.ph + L.strip * 0.5);
+      }
+      // sticker on the top-right corner
+      if (action.sticker) {
+        g.save();
+        g.translate(pad + L.w - L.b * 0.6, padTop + L.b * 0.6);
+        g.rotate(0.25);
+        g.font = `400 ${Math.round(L.w * 0.2)}px ${EMOJI_FONTS}, sans-serif`;
+        g.textAlign = "center";
+        g.textBaseline = "middle";
+        g.shadowColor = "rgba(255,255,255,0.95)";
+        g.shadowBlur = 8;
+        g.fillText(action.sticker, 0, 0);
+        g.restore();
+      }
+      return c;
+    }
+
+    prerenderBadge() {
+      const L = this.card;
+      const P = CONFIG.picture;
+      const pad = Math.round(L.w * 0.12);
+      const c = document.createElement("canvas");
+      c.width = Math.round(L.w + pad * 2);
+      c.height = Math.round(L.h + pad * 2);
+      const g = c.getContext("2d");
+      const x = pad;
+      const y = pad;
+      g.save();
+      g.shadowColor = "rgba(150, 20, 80, 0.35)";
+      g.shadowBlur = pad * 0.6;
+      g.shadowOffsetY = pad * 0.18;
+      const bg = g.createLinearGradient(x, y, x + L.w, y + L.h);
+      bg.addColorStop(0, "#ff7eb6");
+      bg.addColorStop(1, "#ff4f9a");
+      g.fillStyle = bg;
+      roundRectPath(g, x, y, L.w, L.h, L.b * 1.2);
+      g.fill();
+      g.restore();
+      g.lineWidth = L.b * 0.45;
+      g.strokeStyle = "#ffffff";
+      g.setLineDash([L.b * 0.9, L.b * 0.6]);
+      roundRectPath(g, x + L.b * 0.6, y + L.b * 0.6, L.w - L.b * 1.2, L.h - L.b * 1.2, L.b);
+      g.stroke();
+      g.setLineDash([]);
+
+      // a little cat face
+      const cx = x + L.w / 2;
+      const cy = y + L.h * 0.36;
+      const r = Math.min(L.w, L.h) * 0.2;
+      g.fillStyle = "#ffffff";
+      for (const side of [-1, 1]) {
+        g.beginPath();
+        g.moveTo(cx + side * r * 0.95, cy - r * 0.15);
+        g.lineTo(cx + side * r * 0.85, cy - r * 1.25);
+        g.lineTo(cx + side * r * 0.25, cy - r * 0.85);
+        g.closePath();
+        g.fill();
+        g.beginPath();
+        g.fillStyle = "#ffb3d4";
+        g.moveTo(cx + side * r * 0.8, cy - r * 0.4);
+        g.lineTo(cx + side * r * 0.76, cy - r * 1.0);
+        g.lineTo(cx + side * r * 0.42, cy - r * 0.8);
+        g.closePath();
+        g.fill();
+        g.fillStyle = "#ffffff";
+      }
+      g.beginPath();
+      g.arc(cx, cy, r, 0, Math.PI * 2);
+      g.fill();
+      g.strokeStyle = "#5a2340";
+      g.lineWidth = r * 0.09;
+      g.lineCap = "round";
+      for (const side of [-1, 1]) {
+        g.beginPath();
+        g.arc(cx + side * r * 0.38, cy - r * 0.05, r * 0.16, Math.PI * 1.1, Math.PI * 1.9);
+        g.stroke();
+        g.fillStyle = "rgba(255,105,160,0.45)";
+        g.beginPath();
+        g.ellipse(cx + side * r * 0.55, cy + r * 0.3, r * 0.17, r * 0.1, 0, 0, Math.PI * 2);
+        g.fill();
+      }
+      g.beginPath();
+      g.moveTo(cx - r * 0.22, cy + r * 0.32);
+      g.quadraticCurveTo(cx - r * 0.11, cy + r * 0.45, cx, cy + r * 0.32);
+      g.quadraticCurveTo(cx + r * 0.11, cy + r * 0.45, cx + r * 0.22, cy + r * 0.32);
+      g.stroke();
+      g.fillStyle = "#ff6f9f";
+      g.beginPath();
+      g.moveTo(cx - r * 0.08, cy + r * 0.16);
+      g.lineTo(cx + r * 0.08, cy + r * 0.16);
+      g.lineTo(cx, cy + r * 0.26);
+      g.closePath();
+      g.fill();
+
+      // text
+      g.textAlign = "center";
+      g.textBaseline = "middle";
+      g.fillStyle = "#ffffff";
+      g.shadowColor = "rgba(160,10,80,0.55)";
+      g.shadowBlur = 10;
+      fitFont(g, P.gotcha, `400 {s}px "Pacifico", ${EMOJI_FONTS}, cursive`, L.w * 0.2, L.w * 0.86);
+      g.fillText(P.gotcha, cx, y + L.h * 0.7);
+      fitFont(g, P.gotchaSub, `700 {s}px "Fredoka", ${EMOJI_FONTS}, sans-serif`, L.w * 0.085, L.w * 0.86);
+      g.fillText(P.gotchaSub, cx, y + L.h * 0.86);
+      return c;
+    }
+
+    prerenderBackground() {
+      const { W, H } = this;
+      const bg = document.createElement("canvas");
+      bg.width = W;
+      bg.height = H;
+      const c = bg.getContext("2d");
+      const lg = c.createLinearGradient(0, 0, W * 0.35, H);
+      lg.addColorStop(0, "#ff7eb6");
+      lg.addColorStop(0.45, "#ffa6cf");
+      lg.addColorStop(1, "#ffc7e0");
+      c.fillStyle = lg;
+      c.fillRect(0, 0, W, H);
+      const glow = (x, y, r, color) => {
+        const rg = c.createRadialGradient(x, y, 0, x, y, r);
+        rg.addColorStop(0, color);
+        rg.addColorStop(1, "rgba(255,255,255,0)");
+        c.fillStyle = rg;
+        c.fillRect(0, 0, W, H);
+      };
+      glow(W * 0.5, H * 0.52, Math.max(W, H) * 0.6, "rgba(255,255,255,0.45)");
+      glow(W * 0.08, H * 0.95, W * 0.6, "rgba(255,45,135,0.3)");
+      glow(W * 0.92, H * 0.05, W * 0.5, "rgba(255,255,255,0.45)");
+      // polka dots
+      c.fillStyle = "rgba(255,255,255,0.16)";
+      const step = W / 10;
+      for (let y = step / 2, row = 0; y < H; y += step, row++) {
+        for (let x = (row % 2 ? step / 2 : 0) + step / 4; x < W; x += step) {
+          c.beginPath();
+          c.arc(x, y, W * 0.01, 0, Math.PI * 2);
+          c.fill();
+        }
+      }
+      // paw prints, hearts and sparkles (same every time)
+      const r = seededRandom(20261017);
+      c.fillStyle = "rgba(255,255,255,0.32)";
+      for (let i = 0; i < 16; i++) {
+        pawPath(c, r() * W, r() * H, W * (0.03 + r() * 0.025), (r() - 0.5) * 1.2);
+        c.fill();
+      }
+      for (let i = 0; i < 26; i++) {
+        c.globalAlpha = 0.5 + r() * 0.45;
+        c.fillStyle = HEART_COLORS[Math.floor(r() * HEART_COLORS.length)];
+        heartPath(c, r() * W, r() * H, W * (0.02 + r() * 0.035));
+        c.fill();
+      }
+      c.globalAlpha = 1;
+      c.fillStyle = "#ffffff";
+      for (let i = 0; i < 30; i++) {
+        c.globalAlpha = 0.45 + r() * 0.55;
+        starPath(c, r() * W, r() * H, W * (0.006 + r() * 0.012));
+        c.fill();
+      }
+      c.globalAlpha = 1;
+      this.bg = bg;
+    }
+
+    drawText(text, x, y, { template, size, maxWidth, color = "#ffffff", glow = "rgba(255,45,135,0.9)", blur = 18, scale = 1, alpha = 1 }) {
+      if (alpha <= 0 || scale <= 0) return;
+      const g = this.ctx;
+      g.save();
+      g.globalAlpha = clamp(alpha, 0, 1);
+      g.translate(x, y);
+      g.scale(scale, scale);
+      fitFont(g, text, template, size, maxWidth);
+      g.textAlign = "center";
+      g.textBaseline = "middle";
+      g.shadowColor = glow;
+      g.shadowBlur = blur;
+      g.fillStyle = color;
+      g.fillText(text, 0, 0);
+      g.restore();
+    }
+
+    drawPill(text, x, y, { scale = 1, alpha = 1 } = {}) {
+      if (alpha <= 0 || scale <= 0) return;
+      const g = this.ctx;
+      const { W } = this;
+      g.save();
+      g.globalAlpha = clamp(alpha, 0, 1);
+      g.translate(x, y);
+      g.scale(scale, scale);
+      const fs = fitFont(g, text, `700 {s}px "Fredoka", ${EMOJI_FONTS}, sans-serif`, W * 0.042, W * 0.8);
+      const bw = g.measureText(text).width + fs * 1.6;
+      const bh = fs * 1.9;
+      g.shadowColor = "rgba(255,45,135,0.45)";
+      g.shadowBlur = 18;
+      g.fillStyle = "rgba(255,255,255,0.96)";
+      roundRectPath(g, -bw / 2, -bh / 2, bw, bh, bh / 2);
+      g.fill();
+      g.shadowBlur = 0;
+      g.lineWidth = Math.max(3, fs * 0.09);
+      g.strokeStyle = "rgba(255,143,193,0.9)";
+      g.stroke();
+      g.fillStyle = "#ff2d87";
+      g.textAlign = "center";
+      g.textBaseline = "middle";
+      g.fillText(text, 0, fs * 0.04);
+      g.restore();
+    }
+
+    /** Draws the picture as it looks `t` seconds into the build-up (Infinity = final). */
+    draw(t) {
+      const g = this.ctx;
+      const { W, H } = this;
+      const P = CONFIG.picture;
+      const k = (start, dur) => clamp((t - start) / dur, 0, 1);
+      g.drawImage(this.bg, 0, 0);
+
+      const kt = k(0.05, 0.5);
+      this.drawText(P.title, W / 2, H * 0.068, {
+        template: `400 {s}px "Pacifico", ${EMOJI_FONTS}, cursive`,
+        size: W * 0.085,
+        maxWidth: W * 0.9,
+        scale: ease.outBack(kt),
+        alpha: kt * 2,
+      });
+      const ks = k(0.35, 0.45);
+      this.drawPill(P.subtitle, W / 2, H * 0.135, { scale: ease.outBack(ks), alpha: ks * 2 });
+
+      this.order.forEach((slotIndex, n) => {
+        const kc = k(this.cardAt(n), 0.38);
+        if (kc <= 0) return;
+        const s = this.slots[slotIndex];
+        const card = this.cards[n];
+        g.save();
+        g.translate(s.x, s.y);
+        g.rotate(s.rot + (1 - kc) * 0.5);
+        const sc = ease.outBack(kc);
+        g.scale(sc, sc);
+        g.drawImage(card, -card.width / 2, -card.height / 2 - (card.offsetY || 0));
+        g.restore();
+      });
+
+      const kb = k(this.badgeAt, 0.4);
+      if (kb > 0) {
+        const s = this.slots.find((sl) => sl.badge);
+        g.save();
+        g.translate(s.x, s.y);
+        g.rotate(-0.06);
+        const sc = 2.2 - 1.2 * ease.outBack(kb); // stamp: big → normal
+        g.scale(sc, sc);
+        g.globalAlpha = clamp(kb * 2, 0, 1);
+        g.drawImage(this.badge, -this.badge.width / 2, -this.badge.height / 2);
+        g.restore();
+      }
+
+      this.drawText(P.footer, W / 2, H * 0.968, {
+        template: `600 {s}px "Fredoka", ${EMOJI_FONTS}, sans-serif`,
+        size: W * 0.03,
+        maxWidth: W * 0.9,
+        color: "rgba(255,255,255,0.97)",
+        glow: "rgba(200,20,100,0.5)",
+        blur: 8,
+        alpha: k(0.3, 0.4),
+      });
+    }
+  }
+
+  /* ---------- picture playback (build-up animation + music) ---------- */
+  const Picture = {
+    renderer: null,
+    rafId: 0,
+
+    prepare(photos) {
+      if (!this.renderer) this.renderer = new PictureRenderer(els.pictureCanvas);
+      this.renderer.setup(photos);
+      els.showFrame.style.setProperty("--ar", (this.renderer.W / this.renderer.H).toFixed(4));
+      // Render the finished picture once, off-screen, for saving / long-press.
+      state.pictureBlob = null;
+      if (state.pictureURL) URL.revokeObjectURL(state.pictureURL);
+      state.pictureURL = "";
+      const out = document.createElement("canvas");
+      const finalRenderer = new PictureRenderer(out);
+      finalRenderer.setup(photos);
+      finalRenderer.draw(Infinity);
+      out.toBlob((blob) => {
+        if (!blob) return;
+        state.pictureBlob = blob;
+        state.pictureURL = URL.createObjectURL(blob);
+        els.pictureImg.src = state.pictureURL;
+      }, "image/png");
+    },
+
+    poster() {
+      if (this.renderer) this.renderer.draw(0);
+      els.pictureImg.hidden = true;
+    },
+
+    stop() {
+      cancelAnimationFrame(this.rafId);
+    },
+
+    play() {
+      this.stop();
+      const r = this.renderer;
+      const startedAt = performance.now();
+      const sessionId = state.sessionId;
+      let popped = 0;
+      let meowed = false;
+      els.pictureImg.hidden = true;
+      const frame = (now) => {
+        if (sessionId !== state.sessionId || state.phase !== "reveal") return;
+        const t = (now - startedAt) / 1000;
+        r.draw(t);
+        while (popped < r.order.length && t >= r.cardAt(popped)) popSound(popped++);
+        if (!meowed && t >= r.badgeAt) {
+          meowed = true;
+          playMeow();
+          LoveFX.burst(24);
+        }
+        if (t >= r.total) {
+          r.draw(Infinity);
+          if (state.pictureURL) els.pictureImg.hidden = false; // real <img>: long-press to save
+          showActions();
+          return;
+        }
+        this.rafId = requestAnimationFrame(frame);
+      };
+      this.rafId = requestAnimationFrame(frame);
+    },
+  };
+
+  /* ========================================================================
+     11. Transition + reveal screen
      ======================================================================== */
   function pinkFlash(onPeak) {
     const f = els.flash;
@@ -921,7 +1625,7 @@
     setTimeout(() => f.classList.remove("is-on"), 1300);
   }
 
-  async function startReveal() {
+  function startReveal() {
     setLoveTheme(true);
     showScreen("reveal");
     LoveFX.start();
@@ -929,16 +1633,7 @@
     applyVolume();
     hideActions();
     setSaveStatus("");
-    els.showFrame.style.setProperty("--ar", (Show.renderer.W / Show.renderer.H).toFixed(4));
-    Show.showPoster();
-
-    const ctxReady = await resumeAudioContext(400);
-    // If audio can't run yet (common on iPhone after using the camera) the
-    // downloadable video would be silent → ask for one tap first.
-    if (!ctxReady && state.audioCtx && Composite.supported && state.musicBuffer) {
-      showPlaySurprise();
-      return;
-    }
+    Picture.poster();
     startPlayback();
   }
 
@@ -948,19 +1643,15 @@
   }
 
   /**
-   * Starts the show + music from the beginning. Keep this function synchronous
-   * up to the play() call so it also works inside click handlers on iOS.
+   * Starts the music and the picture build-up. Keep this synchronous up to
+   * the play() call so it also works inside click handlers on iOS.
    */
   function startPlayback() {
     const m = els.music;
-    clearEndTimers();
-    stopMusicFade();
-    Composite.abortIfRecording();
-    Show.stop();
-    Show.showPoster();
+    Picture.stop();
+    Picture.poster();
     els.btnPlaySurprise.hidden = true;
     hideActions();
-
     ensureAudioContext();
     applyVolume();
     try {
@@ -970,7 +1661,6 @@
 
     const musicPlay = state.musicOk ? m.play() : Promise.resolve();
     const sessionId = state.sessionId;
-
     Promise.resolve(musicPlay)
       .then(() => "ok")
       .catch((err) => err)
@@ -982,60 +1672,25 @@
             showPlaySurprise();
             return;
           }
-          // Music file missing / unsupported: carry on without music.
-          console.warn("[music] could not play", result);
+          console.warn("[music] could not play", result); // missing file etc. → carry on silently
           state.musicOk = false;
         }
-        // Anchor the show clock to the music so every photo lands on the beat.
-        const offset = state.musicOk && !m.paused ? m.currentTime || 0 : 0;
-        Show.start(offset);
         LoveFX.burst(14);
-        if (!Composite.valid && Composite.supported) {
-          const started = Composite.start(offset);
-          if (!started && state.saveRequested) {
-            state.saveRequested = false;
-            els.btnSave.disabled = false;
-            setSaveStatus("");
-            openSaveFallback("This browser couldn't start building the video.");
-          }
-        }
+        Picture.play();
       });
-  }
-
-  function onShowEnded() {
-    fadeOutMusic(CONFIG.music.fadeOutSeconds);
-    LoveFX.burst(26);
-    const sessionId = state.sessionId;
-    state.endTimers.push(
-      setTimeout(async () => {
-        if (Composite.recording) {
-          Composite.completedPlayback = true;
-          await Composite.stop();
-        }
-        if (sessionId !== state.sessionId || state.phase !== "reveal") return;
-        showActions();
-      }, 400)
-    );
-  }
-
-  function clearEndTimers() {
-    state.endTimers.forEach(clearTimeout);
-    state.endTimers = [];
   }
 
   function showActions() {
     els.actions.classList.add("is-visible");
-    els.btnSave.disabled = false;
   }
 
   function hideActions() {
     els.actions.classList.remove("is-visible");
   }
 
-  /* ---------- floating hearts & sparkles around the show (DOM) ---------- */
+  /* ---------- floating hearts & sparkles around the picture (DOM) ---------- */
   const HEART_SVG =
     '<svg viewBox="0 0 32 29" aria-hidden="true"><path fill="currentColor" d="M16 28.6C14.6 27.5 1 18.7 1 9.6 1 4.8 4.8 1 9.4 1c2.8 0 5.2 1.4 6.6 3.5C17.4 2.4 19.8 1 22.6 1 27.2 1 31 4.8 31 9.6c0 9.1-13.6 17.9-15 19z"/></svg>';
-  const HEART_COLORS = ["#ff2d87", "#ff4f9a", "#ff6fae", "#ff8fc1", "#ffc2dc", "#ffffff", "#e8457f", "#ffd1e6"];
 
   const LoveFX = {
     timer: 0,
@@ -1110,894 +1765,7 @@
   };
 
   /* ========================================================================
-     10. Photo show renderer (Canvas)
-         Pink background, floating hearts & sparkles, and the photos animated
-         together: cartoon pop-ins → stop-motion flipbook → collage + "Gotcha!".
-         The same canvas is shown on screen and recorded for the download.
-     ======================================================================== */
-  const EMOJI_FONTS = '"Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji"';
-  const TRANSITIONS = ["pop", "slide", "drop", "spin", "zoom", "flip", "rise", "jelly"];
-
-  function roundRectPath(ctx, x, y, w, h, r) {
-    const rr = Math.min(r, w / 2, h / 2);
-    ctx.beginPath();
-    ctx.moveTo(x + rr, y);
-    ctx.arcTo(x + w, y, x + w, y + h, rr);
-    ctx.arcTo(x + w, y + h, x, y + h, rr);
-    ctx.arcTo(x, y + h, x, y, rr);
-    ctx.arcTo(x, y, x + w, y, rr);
-    ctx.closePath();
-  }
-
-  function heartPath(ctx, cx, cy, size) {
-    const s = size / 32;
-    ctx.beginPath();
-    ctx.moveTo(cx, cy + 13 * s);
-    ctx.bezierCurveTo(cx - 1.4 * s, cy + 11.9 * s, cx - 15 * s, cy + 3.1 * s, cx - 15 * s, cy - 6 * s);
-    ctx.bezierCurveTo(cx - 15 * s, cy - 10.8 * s, cx - 11.2 * s, cy - 14.6 * s, cx - 6.6 * s, cy - 14.6 * s);
-    ctx.bezierCurveTo(cx - 3.8 * s, cy - 14.6 * s, cx - 1.4 * s, cy - 13.2 * s, cx, cy - 11.1 * s);
-    ctx.bezierCurveTo(cx + 1.4 * s, cy - 13.2 * s, cx + 3.8 * s, cy - 14.6 * s, cx + 6.6 * s, cy - 14.6 * s);
-    ctx.bezierCurveTo(cx + 11.2 * s, cy - 14.6 * s, cx + 15 * s, cy - 10.8 * s, cx + 15 * s, cy - 6 * s);
-    ctx.bezierCurveTo(cx + 15 * s, cy + 3.1 * s, cx + 1.4 * s, cy + 11.9 * s, cx, cy + 13 * s);
-    ctx.closePath();
-  }
-
-  function starPath(ctx, x, y, r) {
-    ctx.beginPath();
-    for (let i = 0; i < 8; i++) {
-      const rad = i % 2 === 0 ? r : r * 0.28;
-      const a = (Math.PI / 4) * i - Math.PI / 2;
-      ctx.lineTo(x + Math.cos(a) * rad, y + Math.sin(a) * rad);
-    }
-    ctx.closePath();
-  }
-
-  const ease = {
-    outBack(x) {
-      const c1 = 1.70158;
-      const c3 = c1 + 1;
-      return 1 + c3 * Math.pow(x - 1, 3) + c1 * Math.pow(x - 1, 2);
-    },
-    outCubic: (x) => 1 - Math.pow(1 - x, 3),
-    inCubic: (x) => x * x * x,
-    outBounce(x) {
-      const n1 = 7.5625;
-      const d1 = 2.75;
-      if (x < 1 / d1) return n1 * x * x;
-      if (x < 2 / d1) return n1 * (x -= 1.5 / d1) * x + 0.75;
-      if (x < 2.5 / d1) return n1 * (x -= 2.25 / d1) * x + 0.9375;
-      return n1 * (x -= 2.625 / d1) * x + 0.984375;
-    },
-  };
-
-  /** Sets ctx.font from a template like `700 {s}px Fredoka`, shrinking until it fits. */
-  function fitFont(ctx, text, template, maxSize, maxWidth) {
-    let size = Math.max(10, Math.round(maxSize));
-    ctx.font = template.replace("{s}", size);
-    while (size > 10 && ctx.measureText(text).width > maxWidth) {
-      size -= 2;
-      ctx.font = template.replace("{s}", size);
-    }
-    return size;
-  }
-
-  class ShowRenderer {
-    constructor(canvas) {
-      this.canvas = canvas;
-      this.ctx = canvas.getContext("2d");
-      this.hearts = [];
-      this.sparkles = [];
-      this.sprites = [];
-      this.bursts = [];
-      this.lastTs = 0;
-      this.lastSegKey = "";
-      this.stamped = false;
-    }
-
-    setup(photos, timeline) {
-      this.photos = photos;
-      this.timeline = timeline;
-      const p0 = photos[0].canvas;
-      const ar = p0.width / p0.height;
-      const portrait = ar < 0.9;
-      const W = portrait ? 720 : 960;
-      const H = portrait ? 1280 : 960;
-      this.W = W;
-      this.H = H;
-      this.canvas.width = W;
-      this.canvas.height = H;
-      this.titleH = H * (portrait ? 0.1 : 0.12);
-
-      // single photo "polaroid" layout
-      this.big = this.layoutCard(ar, W * (portrait ? 0.74 : 0.7), H * (portrait ? 0.56 : 0.54), true);
-      this.cardCenterY = H * 0.5;
-
-      // collage grid: pick the column count that gives the biggest photos
-      const n = photos.length;
-      const areaW = W * 0.9;
-      const areaH = H * (portrait ? 0.66 : 0.6);
-      let best = null;
-      for (let cols = 1; cols <= n; cols++) {
-        const rows = Math.ceil(n / cols);
-        const L = this.layoutCard(ar, (areaW / cols) * 0.88, (areaH / rows) * 0.88, false);
-        if (!best || L.pw * L.ph > best.L.pw * best.L.ph) best = { cols, rows, L };
-      }
-      const cellW = best.L.w / 0.88;
-      const cellH = best.L.h / 0.88;
-      this.grid = { cols: best.cols, rows: best.rows, cellW, cellH, areaTop: H * 0.5 - (best.rows * cellH) / 2 + H * 0.01 };
-      this.small = best.L;
-
-      this.prerenderBackground();
-      this.prerenderSprites();
-      this.cardsBig = photos.map((p) => this.prerenderCard(p.canvas, this.big, p.action && p.action.caption));
-      this.cardsSmall = photos.map((p) => this.prerenderCard(p.canvas, this.small, null));
-      this.initParticles();
-      this.lastTs = 0;
-      this.lastSegKey = "";
-      this.bursts = [];
-      this.stamped = false;
-    }
-
-    layoutCard(ar, maxW, maxH, withStrip) {
-      // card = white border + photo + caption strip, fitted inside maxW × maxH
-      const bRatio = 0.05; // border, relative to photo width
-      const stripRatio = withStrip ? 0.2 : 0.06; // caption strip, relative to photo height
-      let pw = maxW / (1 + 2 * bRatio);
-      let ph = pw / ar;
-      const cardH = (h) => h * (1 + stripRatio) + h * ar * bRatio;
-      if (cardH(ph) > maxH) {
-        ph = maxH / (1 + stripRatio + ar * bRatio);
-        pw = ph * ar;
-      }
-      const b = pw * bRatio;
-      const strip = ph * stripRatio;
-      return { pw, ph, b, strip, w: pw + 2 * b, h: ph + b + strip };
-    }
-
-    prerenderCard(photo, L, caption) {
-      const pad = Math.round(L.w * 0.08);
-      const c = document.createElement("canvas");
-      c.width = Math.round(L.w + pad * 2);
-      c.height = Math.round(L.h + pad * 2);
-      const g = c.getContext("2d");
-      g.save();
-      g.shadowColor = "rgba(150, 20, 80, 0.35)";
-      g.shadowBlur = pad * 0.8;
-      g.shadowOffsetY = pad * 0.25;
-      g.fillStyle = "#ffffff";
-      roundRectPath(g, pad, pad, L.w, L.h, L.b * 0.7);
-      g.fill();
-      g.restore();
-      g.save();
-      roundRectPath(g, pad + L.b, pad + L.b, L.pw, L.ph, L.b * 0.35);
-      g.clip();
-      g.drawImage(photo, pad + L.b, pad + L.b, L.pw, L.ph);
-      g.restore();
-      if (caption) {
-        g.fillStyle = "#ff2d87";
-        g.textAlign = "center";
-        g.textBaseline = "middle";
-        fitFont(g, caption, `400 {s}px "Pacifico", ${EMOJI_FONTS}, cursive`, L.strip * 0.48, L.pw * 0.92);
-        g.fillText(caption, c.width / 2, pad + L.b + L.ph + L.strip * 0.48);
-      }
-      return { canvas: c };
-    }
-
-    prerenderBackground() {
-      const { W, H } = this;
-      const bg = document.createElement("canvas");
-      bg.width = W;
-      bg.height = H;
-      const c = bg.getContext("2d");
-      const lg = c.createLinearGradient(0, 0, W * 0.3, H);
-      lg.addColorStop(0, "#ff6fae");
-      lg.addColorStop(0.4, "#ff9fcb");
-      lg.addColorStop(0.72, "#ffc2dc");
-      lg.addColorStop(1, "#ffa8cf");
-      c.fillStyle = lg;
-      c.fillRect(0, 0, W, H);
-      const glow = (x, y, r, color) => {
-        const rg = c.createRadialGradient(x, y, 0, x, y, r);
-        rg.addColorStop(0, color);
-        rg.addColorStop(1, "rgba(255,255,255,0)");
-        c.fillStyle = rg;
-        c.fillRect(0, 0, W, H);
-      };
-      glow(W * 0.5, H * 0.48, Math.max(W, H) * 0.55, "rgba(255,255,255,0.5)");
-      glow(W * 0.1, H * 0.9, W * 0.6, "rgba(255,45,135,0.35)");
-      glow(W * 0.9, H * 0.08, W * 0.5, "rgba(255,255,255,0.45)");
-      // polka dots for a cute cartoon feel
-      c.fillStyle = "rgba(255,255,255,0.14)";
-      const step = W / 9;
-      for (let y = step / 2, row = 0; y < H; y += step, row++) {
-        for (let x = (row % 2 ? step / 2 : 0) + step / 4; x < W; x += step) {
-          c.beginPath();
-          c.arc(x, y, W * 0.012, 0, Math.PI * 2);
-          c.fill();
-        }
-      }
-      this.bg = bg;
-    }
-
-    prerenderSprites() {
-      this.sprites = HEART_COLORS.map((color) => {
-        const size = 64;
-        const pad = 14;
-        const sp = document.createElement("canvas");
-        sp.width = size + pad * 2;
-        sp.height = size + pad * 2;
-        const c = sp.getContext("2d");
-        c.shadowColor = color === "#ffffff" ? "rgba(255,105,180,0.6)" : "rgba(255,255,255,0.8)";
-        c.shadowBlur = 10;
-        c.fillStyle = color;
-        heartPath(c, sp.width / 2, sp.height / 2, size);
-        c.fill();
-        return sp;
-      });
-    }
-
-    initParticles() {
-      const { W, H } = this;
-      this.hearts = [];
-      const n = Math.round((W * H) / 40000);
-      for (let i = 0; i < n; i++) this.hearts.push(this.newHeart(true));
-      this.sparkles = [];
-      for (let i = 0; i < 26; i++) {
-        this.sparkles.push({ x: rand(0, W), y: rand(0, H), r: rand(6, 16), sp: rand(1.5, 3.5), ph: rand(0, 6.28) });
-      }
-    }
-
-    newHeart(anywhere) {
-      const { W, H } = this;
-      const size = rand(W * 0.025, W * 0.065);
-      return {
-        x: rand(0, W),
-        y: anywhere ? rand(0, H) : H + size,
-        size,
-        vy: rand(H * 0.05, H * 0.1),
-        sway: rand(8, 26),
-        freq: rand(0.6, 1.4),
-        ph: rand(0, 6.28),
-        rot: rand(-0.3, 0.3),
-        alpha: rand(0.5, 0.9),
-        sprite: pick(this.sprites),
-      };
-    }
-
-    burst(x, y, count) {
-      const { W } = this;
-      for (let i = 0; i < count; i++) {
-        const a = rand(0, Math.PI * 2);
-        const sp = rand(W * 0.25, W * 0.6);
-        this.bursts.push({
-          x,
-          y,
-          vx: Math.cos(a) * sp,
-          vy: Math.sin(a) * sp - W * 0.15,
-          life: 0,
-          max: rand(0.6, 1.1),
-          size: rand(W * 0.03, W * 0.06),
-          sprite: pick(this.sprites),
-          rot: rand(-1, 1),
-        });
-      }
-    }
-
-    drawBackground(wall, dt) {
-      const { ctx, H } = this;
-      ctx.drawImage(this.bg, 0, 0);
-      ctx.fillStyle = "#ffffff";
-      this.sparkles.forEach((s) => {
-        const a = Math.abs(Math.sin(wall * s.sp + s.ph));
-        ctx.globalAlpha = 0.15 + a * 0.85;
-        starPath(ctx, s.x, s.y, s.r * (0.5 + a * 0.6));
-        ctx.fill();
-      });
-      ctx.globalAlpha = 1;
-      for (let i = 0; i < this.hearts.length; i++) {
-        const h = this.hearts[i];
-        h.y -= h.vy * dt;
-        if (h.y < -h.size * 1.5) {
-          this.hearts[i] = this.newHeart(false);
-          continue;
-        }
-        const x = h.x + Math.sin(wall * h.freq + h.ph) * h.sway;
-        ctx.globalAlpha = h.alpha * clamp((h.y / H) * 4, 0, 1);
-        const s = h.size * 1.4;
-        ctx.save();
-        ctx.translate(x, h.y);
-        ctx.rotate(h.rot + Math.sin(wall * h.freq + h.ph) * 0.2);
-        ctx.drawImage(h.sprite, -s / 2, -s / 2, s, s);
-        ctx.restore();
-      }
-      ctx.globalAlpha = 1;
-    }
-
-    drawBursts(dt) {
-      const { ctx, W } = this;
-      this.bursts = this.bursts.filter((p) => {
-        p.life += dt;
-        if (p.life > p.max) return false;
-        p.vy += W * 0.9 * dt; // gravity
-        p.x += p.vx * dt;
-        p.y += p.vy * dt;
-        const k = p.life / p.max;
-        ctx.globalAlpha = 1 - k;
-        ctx.save();
-        ctx.translate(p.x, p.y);
-        ctx.rotate(p.rot * k * 3);
-        ctx.drawImage(p.sprite, -p.size / 2, -p.size / 2, p.size, p.size);
-        ctx.restore();
-        return true;
-      });
-      ctx.globalAlpha = 1;
-    }
-
-    /** Draws a pre-rendered polaroid centred on (x, y). */
-    drawCard(card, x, y, { rot = 0, scale = 1, sx = 1, sy = 1, alpha = 1 } = {}) {
-      if (alpha <= 0 || scale <= 0) return;
-      const { ctx } = this;
-      ctx.save();
-      ctx.globalAlpha = clamp(alpha, 0, 1);
-      ctx.translate(x, y);
-      ctx.rotate(rot);
-      ctx.scale(scale * sx, scale * sy);
-      ctx.drawImage(card.canvas, -card.canvas.width / 2, -card.canvas.height / 2);
-      ctx.restore();
-    }
-
-    drawText(text, x, y, opts) {
-      const { ctx } = this;
-      const { font, size, color = "#ffffff", glow = "rgba(255,45,135,0.9)", blur = 20, alpha = 1, scale = 1, rot = 0, maxWidth = 0 } = opts;
-      if (alpha <= 0 || scale <= 0) return;
-      ctx.save();
-      ctx.globalAlpha = clamp(alpha, 0, 1);
-      ctx.translate(x, y);
-      ctx.rotate(rot);
-      ctx.scale(scale, scale);
-      if (maxWidth) fitFont(ctx, text, font, size, maxWidth);
-      else ctx.font = font.replace("{s}", Math.round(size));
-      ctx.textAlign = "center";
-      ctx.textBaseline = "middle";
-      ctx.shadowColor = glow;
-      ctx.shadowBlur = blur;
-      ctx.fillStyle = color;
-      ctx.fillText(text, 0, 0);
-      ctx.restore();
-    }
-
-    drawPill(text, x, y, { alpha = 1, scale = 1, rot = 0 } = {}) {
-      if (alpha <= 0 || scale <= 0) return;
-      const { ctx, W } = this;
-      ctx.save();
-      ctx.globalAlpha = clamp(alpha, 0, 1);
-      ctx.translate(x, y);
-      ctx.rotate(rot);
-      ctx.scale(scale, scale);
-      const fs = fitFont(ctx, text, `700 {s}px "Fredoka", ${EMOJI_FONTS}, sans-serif`, W * 0.05, W * 0.78);
-      const tw = ctx.measureText(text).width;
-      const bw = tw + fs * 1.5;
-      const bh = fs * 1.9;
-      ctx.shadowColor = "rgba(255,45,135,0.5)";
-      ctx.shadowBlur = 20;
-      ctx.fillStyle = "rgba(255,255,255,0.96)";
-      roundRectPath(ctx, -bw / 2, -bh / 2, bw, bh, bh / 2);
-      ctx.fill();
-      ctx.shadowBlur = 0;
-      ctx.lineWidth = Math.max(3, fs * 0.09);
-      ctx.strokeStyle = "rgba(255,143,193,0.9)";
-      ctx.stroke();
-      ctx.fillStyle = "#ff2d87";
-      ctx.textAlign = "center";
-      ctx.textBaseline = "middle";
-      ctx.fillText(text, 0, fs * 0.04);
-      ctx.restore();
-    }
-
-    /** Cartoon entrance for a photo; p goes 0 → 1. */
-    enterTransform(kind, p) {
-      const { W, H } = this;
-      const e = clamp(p, 0, 1);
-      switch (kind) {
-        case "slide":
-          return { dx: (1 - ease.outBack(e)) * W, rot: (1 - e) * 0.5 };
-        case "drop":
-          return { dy: -(1 - ease.outBounce(e)) * H };
-        case "spin":
-          return { rot: (1 - ease.outCubic(e)) * Math.PI * 2, scale: ease.outBack(e) };
-        case "zoom":
-          return { scale: 1 + (1 - ease.outCubic(e)) * 2.2, alpha: e * 1.5 };
-        case "flip":
-          return { sx: Math.max(0.02, ease.outBack(e)) };
-        case "rise":
-          return { dy: (1 - ease.outBack(e)) * H * 0.9, rot: (1 - e) * -0.4 };
-        case "jelly": {
-          const w = Math.sin(e * Math.PI * 5) * (1 - e) * 0.35;
-          return { scale: 0.6 + 0.4 * ease.outCubic(e), sx: 1 + w, sy: 1 - w };
-        }
-        case "pop":
-        default:
-          return { scale: ease.outBack(e), rot: (1 - e) * -0.6 };
-      }
-    }
-
-    beatPulse(u) {
-      const beat = 60 / CONFIG.show.bpm;
-      const ph = (u % beat) / beat;
-      return 1 + 0.03 * Math.exp(-ph * 7);
-    }
-
-    drawTopTitle(wall) {
-      this.drawText(CONFIG.show.title, this.W / 2, this.titleH * 0.6 + Math.sin(wall * 2.4) * 4, {
-        font: `400 {s}px "Pacifico", ${EMOJI_FONTS}, cursive`,
-        size: this.W * 0.075,
-      });
-    }
-
-    drawFooter() {
-      this.drawText(CONFIG.show.footer, this.W / 2, this.H * 0.965, {
-        font: `600 {s}px "Fredoka", ${EMOJI_FONTS}, sans-serif`,
-        size: this.W * 0.03,
-        color: "rgba(255,255,255,0.95)",
-        glow: "rgba(200,20,100,0.45)",
-        blur: 8,
-      });
-    }
-
-    drawSticker(emoji, x, y, u, size, wall) {
-      const k = clamp((u - 0.25) / 0.35, 0, 1);
-      if (k <= 0) return;
-      this.drawText(emoji, x, y, {
-        font: `400 {s}px ${EMOJI_FONTS}, sans-serif`,
-        size,
-        glow: "rgba(255,255,255,0.9)",
-        blur: 12,
-        scale: ease.outBack(k),
-        rot: Math.sin(wall * 6) * 0.2,
-      });
-    }
-
-    /**
-     * @param {number} t   seconds since the show started
-     * @param {number} now performance.now()
-     */
-    draw(t, now) {
-      const { W, H } = this;
-      const dt = this.lastTs ? clamp((now - this.lastTs) / 1000, 0, 0.1) : 0;
-      this.lastTs = now;
-      const tl = this.timeline;
-      const time = clamp(t, 0, tl.total);
-      let seg = tl.segs[tl.segs.length - 1];
-      for (const s of tl.segs) {
-        if (time < s.end) {
-          seg = s;
-          break;
-        }
-      }
-      const u = time - seg.start;
-      const D = seg.end - seg.start;
-      const wall = now / 1000;
-
-      this.drawBackground(wall, dt);
-
-      // confetti bursts when a segment begins
-      const key = `${seg.type}:${seg.index != null ? seg.index : ""}`;
-      if (key !== this.lastSegKey) {
-        this.lastSegKey = key;
-        if (seg.type === "photo") this.burst(W / 2, this.cardCenterY, 14);
-        if (seg.type === "intro") this.burst(W / 2, H * 0.45, 18);
-      }
-
-      if (seg.type === "intro") this.drawIntro(u, D, wall);
-      else if (seg.type === "photo") this.drawPhoto(seg.index, u, wall);
-      else if (seg.type === "flipbook") this.drawFlipbook(u, wall);
-      else this.drawFinale(seg.type === "finale" ? u : CONFIG.show.finaleSeconds + u, wall);
-
-      this.drawBursts(dt);
-      this.drawFooter();
-    }
-
-    drawIntro(u, D, wall) {
-      const { W, H } = this;
-      const k = clamp(u / 0.6, 0, 1);
-      const out = clamp((u - (D - 0.25)) / 0.25, 0, 1);
-      this.drawText(CONFIG.show.title, W / 2, H * 0.42, {
-        font: `400 {s}px "Pacifico", ${EMOJI_FONTS}, cursive`,
-        size: W * 0.14,
-        scale: ease.outBack(k) * (1 - out * 0.3),
-        rot: Math.sin(wall * 3) * 0.05 - (1 - k) * 0.4,
-        alpha: 1 - out,
-        blur: 30,
-        maxWidth: W * 0.9,
-      });
-      const k2 = clamp((u - 0.55) / 0.45, 0, 1);
-      if (k2 > 0) this.drawPill(CONFIG.show.introCaption, W / 2, H * 0.58, { scale: ease.outBack(k2), alpha: k2 * (1 - out) });
-    }
-
-    drawPhoto(i, u, wall) {
-      const { W } = this;
-      const cy = this.cardCenterY;
-      this.drawTopTitle(wall);
-
-      // previous photo gets tossed away
-      if (i > 0 && u < 0.4) {
-        const q = ease.inCubic(clamp(u / 0.4, 0, 1));
-        const dir = i % 2 ? -1 : 1;
-        this.drawCard(this.cardsBig[i - 1], W / 2 + dir * q * W * 1.1, cy - q * W * 0.2, {
-          rot: ((i - 1) % 2 ? 0.05 : -0.05) + dir * q * 0.8,
-          scale: 1 - q * 0.3,
-        });
-      }
-
-      const tr = this.enterTransform(TRANSITIONS[i % TRANSITIONS.length], u / 0.45);
-      const baseRot = i % 2 ? 0.05 : -0.05;
-      this.drawCard(this.cardsBig[i], W / 2 + (tr.dx || 0), cy + (tr.dy || 0), {
-        rot: baseRot + Math.sin(wall * 2.2 + i) * 0.015 + (tr.rot || 0),
-        scale: (tr.scale != null ? tr.scale : 1) * this.beatPulse(u),
-        sx: tr.sx || 1,
-        sy: tr.sy || 1,
-        alpha: tr.alpha != null ? tr.alpha : 1,
-      });
-
-      const L = this.big;
-      const action = this.photos[i].action || {};
-      if (action.sticker) this.drawSticker(action.sticker, W / 2 + L.w * 0.44, cy - L.h * 0.45, u, W * 0.13, wall);
-      const kc = clamp((u - 0.2) / 0.3, 0, 1);
-      this.drawText(`${i + 1} / ${this.photos.length}`, W / 2 - L.w * 0.36, cy - L.h * 0.5 - W * 0.012, {
-        font: `700 {s}px "Fredoka", sans-serif`,
-        size: W * 0.04,
-        glow: "rgba(200,20,100,0.6)",
-        blur: 10,
-        alpha: kc,
-        scale: ease.outBack(kc),
-      });
-    }
-
-    drawFlipbook(u, wall) {
-      const { W, H } = this;
-      const n = this.photos.length;
-      const frameSec = CONFIG.show.flipbookFrameSeconds;
-      const f = Math.floor(u / frameSec);
-      const idx = f % n;
-      const local = (u % frameSec) / frameSec;
-      const jitterX = Math.sin(f * 12.9898) * W * 0.012;
-      const jitterY = Math.cos(f * 78.233) * W * 0.012;
-      const bump = 1 + 0.05 * (1 - ease.outCubic(local));
-      const enter = clamp(u / 0.3, 0, 1);
-      this.drawTopTitle(wall);
-      this.drawCard(this.cardsBig[idx], W / 2 + jitterX, this.cardCenterY + jitterY, {
-        rot: f % 2 ? 0.045 : -0.045,
-        scale: bump * (0.6 + 0.4 * ease.outBack(enter)),
-      });
-      this.drawText("🎞️", W / 2 - this.big.w * 0.44, this.cardCenterY - this.big.h * 0.45, {
-        font: `400 {s}px ${EMOJI_FONTS}, sans-serif`,
-        size: W * 0.1,
-        glow: "rgba(255,255,255,0.9)",
-        blur: 10,
-        rot: Math.sin(wall * 8) * 0.15,
-      });
-      const kp = clamp((u - 0.2) / 0.4, 0, 1);
-      this.drawPill(CONFIG.show.flipbookCaption, W / 2, Math.min(H * 0.9, this.cardCenterY + this.big.h / 2 + H * 0.055), {
-        scale: ease.outBack(kp) * (1 + 0.04 * Math.sin(wall * 8)),
-        alpha: kp,
-      });
-    }
-
-    drawFinale(u, wall) {
-      const { W, H } = this;
-      const g = this.grid;
-      const n = this.photos.length;
-      this.drawTopTitle(wall);
-      const stampAt = CONFIG.show.finaleSeconds * 0.5;
-      const stampK = clamp((u - stampAt) / 0.35, 0, 1);
-      // a little screen shake right after the stamp lands
-      const since = u - stampAt;
-      const shake = stampK > 0 && since < 0.45 ? (1 - since / 0.45) * W * 0.012 : 0;
-      const ox = shake ? Math.sin(u * 90) * shake : 0;
-      const oy = shake ? Math.cos(u * 77) * shake : 0;
-
-      const left = (W - g.cols * g.cellW) / 2;
-      for (let j = 0; j < n; j++) {
-        const col = j % g.cols;
-        const row = Math.floor(j / g.cols);
-        const inRow = row === g.rows - 1 ? n - row * g.cols : g.cols;
-        const rowOffset = ((g.cols - inRow) * g.cellW) / 2; // centre a short last row
-        const x = left + rowOffset + col * g.cellW + g.cellW / 2 + ox;
-        const y = g.areaTop + row * g.cellH + g.cellH / 2 + oy;
-        const k = clamp((u - j * 0.14) / 0.35, 0, 1);
-        if (k <= 0) continue;
-        const rot = (j % 2 ? 0.07 : -0.06) + Math.sin(wall * 2 + j) * 0.02;
-        this.drawCard(this.cardsSmall[j], x, y, { rot: rot + (1 - k) * 0.8, scale: ease.outBack(k) * this.beatPulse(u) });
-      }
-
-      const kc = clamp((u - 1.2) / 0.4, 0, 1);
-      if (kc > 0 && stampK < 1) {
-        const py = Math.min(H * 0.9, g.areaTop + g.rows * g.cellH + H * 0.045);
-        this.drawPill(CONFIG.show.finaleCaption, W / 2, py, { scale: ease.outBack(kc), alpha: kc * (1 - stampK) });
-      }
-
-      if (stampK > 0) {
-        if (!this.stamped) {
-          this.stamped = true;
-          this.burst(W / 2, H * 0.47, 30);
-        }
-        this.drawText(CONFIG.show.gotcha, W / 2 + ox, H * 0.47 + oy, {
-          font: `400 {s}px "Pacifico", ${EMOJI_FONTS}, cursive`,
-          size: W * 0.17,
-          scale: 2.6 - 1.6 * ease.outBack(stampK),
-          rot: -0.12,
-          alpha: stampK * 1.5,
-          blur: 34,
-          maxWidth: W * 0.92,
-        });
-        const ks = clamp((since - 0.4) / 0.4, 0, 1);
-        if (ks > 0) this.drawPill(CONFIG.show.gotchaSub, W / 2, H * 0.47 + W * 0.17, { scale: ease.outBack(ks), alpha: ks });
-      } else {
-        this.stamped = false;
-      }
-    }
-  }
-
-  /* ---------- show playback engine ---------- */
-  function buildShowTimeline(count) {
-    const s = CONFIG.show;
-    const segs = [];
-    let t = 0;
-    const add = (type, dur, extra) => {
-      if (dur > 0) segs.push({ type, start: t, end: t + dur, ...extra });
-      t += Math.max(0, dur);
-    };
-    add("intro", s.introSeconds);
-    for (let i = 0; i < count; i++) add("photo", s.photoSeconds, { index: i });
-    if (count > 1) add("flipbook", s.flipbookSeconds);
-    add("finale", s.finaleSeconds);
-    add("outro", s.outroSeconds);
-    return { segs, total: t };
-  }
-
-  const Show = {
-    renderer: null,
-    timeline: null,
-    ended: false,
-    startAt: 0,
-    rafId: 0,
-
-    prepare(photos) {
-      if (!this.renderer) this.renderer = new ShowRenderer(els.showCanvas);
-      this.timeline = buildShowTimeline(photos.length);
-      this.renderer.setup(photos, this.timeline);
-    },
-
-    /** Draws a still frame while waiting to start (e.g. behind "Play Surprise"). */
-    showPoster() {
-      if (!this.renderer || !this.timeline) return;
-      this.renderer.lastSegKey = "intro:";
-      this.renderer.draw(0.9, performance.now());
-    },
-
-    start(offsetSeconds = 0) {
-      this.stop();
-      this.ended = false;
-      this.renderer.lastSegKey = "";
-      this.renderer.stamped = false;
-      this.startAt = performance.now() - offsetSeconds * 1000;
-      const sessionId = state.sessionId;
-      const frame = (now) => {
-        if (sessionId !== state.sessionId || state.phase !== "reveal") return;
-        const t = (now - this.startAt) / 1000;
-        this.renderer.draw(t, now);
-        if (!this.ended && t >= this.timeline.total) {
-          this.ended = true;
-          onShowEnded();
-        }
-        this.rafId = requestAnimationFrame(frame); // hearts keep floating after the end
-      };
-      this.rafId = requestAnimationFrame(frame);
-    },
-
-    stop() {
-      cancelAnimationFrame(this.rafId);
-      this.ended = false;
-    },
-  };
-
-  /* ========================================================================
-     11. Video export (show canvas + music → downloadable file)
-     ======================================================================== */
-  const Composite = {
-    supported: false,
-    mime: "",
-    recording: false,
-    stopping: null,
-    recorder: null,
-    stream: null,
-    chunks: [],
-    blob: null,
-    valid: false,
-    audio: null,
-    hiddenDuringRecord: false,
-    completedPlayback: false,
-    musicIncluded: false,
-
-    detect() {
-      const hasRecorder = typeof window.MediaRecorder === "function";
-      const hasCapture = typeof els.showCanvas.captureStream === "function";
-      this.mime = pickMimeType(COMPOSITE_TYPES);
-      const typeCheckAvailable = hasRecorder && typeof MediaRecorder.isTypeSupported === "function";
-      this.supported = hasRecorder && hasCapture && (!!this.mime || !typeCheckAvailable);
-    },
-
-    reset() {
-      this.abortIfRecording();
-      this.blob = null;
-      this.valid = false;
-      this.musicIncluded = false;
-      els.btnSave.classList.remove("is-ready");
-    },
-
-    buildAudio(offset) {
-      const ctx = state.audioCtx;
-      if (!ctx || typeof ctx.createMediaStreamDestination !== "function" || ctx.state !== "running") return null;
-      if (!state.musicBuffer) return null;
-      try {
-        const dest = ctx.createMediaStreamDestination();
-        const src = ctx.createBufferSource();
-        src.buffer = state.musicBuffer;
-        src.loop = true;
-        const gain = ctx.createGain();
-        gain.gain.value = CONFIG.music.videoVolume;
-        src.connect(gain);
-        gain.connect(dest);
-        src.start(0, offset % state.musicBuffer.duration);
-        // fade out together with the show
-        const fadeAt = ctx.currentTime + Math.max(0, Show.timeline.total - offset);
-        gain.gain.setValueAtTime(CONFIG.music.videoVolume, fadeAt);
-        gain.gain.linearRampToValueAtTime(0.0001, fadeAt + CONFIG.music.fadeOutSeconds);
-        return { dest, nodes: [src, gain] };
-      } catch (err) {
-        console.warn("[export] audio setup failed", err);
-        return null;
-      }
-    },
-
-    cleanupAudio() {
-      if (!this.audio) return;
-      this.audio.nodes.forEach((n) => {
-        try {
-          if (typeof n.stop === "function") n.stop();
-        } catch (_) { /* ignore */ }
-        try {
-          n.disconnect();
-        } catch (_) { /* ignore */ }
-      });
-      this.audio = null;
-    },
-
-    start(offset) {
-      if (!this.supported || this.recording) return false;
-      try {
-        const stream = els.showCanvas.captureStream(CONFIG.composite.fps);
-        this.audio = this.buildAudio(offset);
-        this.musicIncluded = !!this.audio;
-        if (this.audio) this.audio.dest.stream.getAudioTracks().forEach((t) => stream.addTrack(t));
-
-        const options = { videoBitsPerSecond: CONFIG.composite.videoBitsPerSecond };
-        if (this.audio) options.audioBitsPerSecond = 128000;
-        if (this.mime) options.mimeType = this.mime;
-        let recorder;
-        try {
-          recorder = new MediaRecorder(stream, options);
-        } catch (_) {
-          recorder = new MediaRecorder(stream);
-        }
-        this.chunks = [];
-        recorder.ondataavailable = (e) => {
-          if (e.data && e.data.size > 0) this.chunks.push(e.data);
-        };
-        recorder.onerror = (e) => console.warn("[export] recorder error", e.error || e);
-        this.stream = stream;
-        this.recorder = recorder;
-        this.hiddenDuringRecord = document.hidden;
-        this.completedPlayback = false;
-        this.recording = true;
-        this.stopping = null;
-        const mime = recorder.mimeType || this.mime;
-        // Safari's MP4 recorder is most reliable without a timeslice.
-        if (isMp4(mime)) recorder.start();
-        else recorder.start(1000);
-        return true;
-      } catch (err) {
-        console.warn("[export] cannot build the video in this browser", err);
-        this.cleanupAudio();
-        this.recording = false;
-        this.supported = false;
-        return false;
-      }
-    },
-
-    /** Finishes the recording; resolves once the file is ready. */
-    stop() {
-      if (!this.recording) return Promise.resolve(this.valid);
-      if (this.stopping) return this.stopping;
-      const recorder = this.recorder;
-      this.stopping = new Promise((resolve) => {
-        let finished = false;
-        const finish = () => {
-          if (finished) return;
-          finished = true;
-          const type = ((recorder && recorder.mimeType) || this.mime || "video/webm").split(";")[0];
-          const blob = new Blob(this.chunks, { type });
-          const ok = this.completedPlayback && !this.hiddenDuringRecord && blob.size > 20000;
-          // A full, visible playback that still produced no usable file means
-          // this browser can't really build the video → use the fallback next time.
-          if (!ok && this.completedPlayback && !this.hiddenDuringRecord) this.supported = false;
-          this.teardown();
-          if (ok) {
-            this.blob = blob;
-            this.valid = true;
-          }
-          onCompositeFinished(ok);
-          resolve(ok);
-        };
-        if (!recorder || recorder.state === "inactive") return finish();
-        recorder.onstop = finish;
-        try {
-          recorder.stop();
-        } catch (_) {
-          finish();
-        }
-        setTimeout(finish, 4000);
-      });
-      return this.stopping;
-    },
-
-    abortIfRecording() {
-      if (!this.recording) return;
-      const recorder = this.recorder;
-      if (recorder && recorder.state !== "inactive") {
-        recorder.onstop = null;
-        recorder.ondataavailable = null;
-        try {
-          recorder.stop();
-        } catch (_) { /* ignore */ }
-      }
-      this.teardown();
-    },
-
-    teardown() {
-      this.recording = false;
-      this.stopping = null;
-      this.chunks = [];
-      this.recorder = null;
-      if (this.stream) {
-        this.stream.getTracks().forEach((t) => {
-          try {
-            t.stop();
-          } catch (_) { /* ignore */ }
-        });
-      }
-      this.stream = null;
-      this.cleanupAudio();
-    },
-  };
-
-  function onCompositeFinished(ok) {
-    if (!state.saveRequested) return;
-    state.saveRequested = false;
-    els.btnSave.disabled = false;
-    if (ok) {
-      els.btnSave.classList.add("is-ready");
-      setSaveStatus("✅ Your video is ready! Tap “Save My Video” to download it.");
-    } else if (!Composite.supported) {
-      setSaveStatus("");
-      openSaveFallback("This browser couldn't finish building the video file.");
-    } else {
-      setSaveStatus("The video couldn't be finished (was the tab in the background?). Tap “Save My Video” to try again.");
-    }
-  }
-
-  /* ========================================================================
-     12. Saving
+     12. Saving the picture
      ======================================================================== */
   function timestamp() {
     const d = new Date();
@@ -2020,122 +1788,69 @@
     }, 60000);
   }
 
-  /** iPhone/iPad: open the share sheet ("Save Video"/"Save Image" → Photos). Elsewhere: download. */
-  function deliverFile(blob, filename, successText) {
+  /** iPhone/iPad: share sheet ("Save Image" → Photos). Elsewhere: normal download. */
+  function onSaveClick() {
+    const blob = state.pictureBlob;
+    if (!blob) {
+      toast("Your picture is still being made — try again in a second 💗");
+      return;
+    }
+    const filename = `${CONFIG.downloadName}-${timestamp()}.png`;
     if (IS_IOS && navigator.canShare && typeof File === "function") {
       try {
-        const file = new File([blob], filename, { type: blob.type });
+        const file = new File([blob], filename, { type: "image/png" });
         if (navigator.canShare({ files: [file] })) {
           navigator
-            .share({ files: [file], title: "My prank show 💗" })
-            .then(() => setSaveStatus("💕 Saved! Choose “Save Video” / “Save Image” to keep it in Photos."))
+            .share({ files: [file], title: "My cute picture 💗" })
+            .then(() => setSaveStatus("💕 Saved! Choose “Save Image” to keep it in Photos."))
             .catch((err) => {
               if (err && err.name === "AbortError") return;
               downloadBlob(blob, filename);
-              setSaveStatus(successText);
+              setSaveStatus("📥 Saved! Check your Downloads.");
             });
           return;
         }
       } catch (_) { /* fall through to download */ }
     }
     downloadBlob(blob, filename);
-    setSaveStatus(successText);
-  }
-
-  async function onSaveClick() {
-    if (Composite.recording && Composite.stopping) {
-      els.btnSave.disabled = true;
-      setSaveStatus("Finishing your video… 💗");
-      await Composite.stopping;
-      els.btnSave.disabled = false;
-    }
-    if (Composite.valid && Composite.blob) {
-      const ext = isMp4(Composite.blob.type) ? "mp4" : "webm";
-      const note = Composite.musicIncluded ? "" : " (music couldn't be added in this browser)";
-      deliverFile(Composite.blob, `${CONFIG.downloadName}-${timestamp()}.${ext}`, `📥 Downloaded! Check your Downloads folder${note}.`);
-      return;
-    }
-    if (!Composite.supported) {
-      openSaveFallback();
-      return;
-    }
-    if (Composite.recording) {
-      state.saveRequested = true;
-      setSaveStatus("Your video is being created while it plays… 💗");
-      return;
-    }
-    // The first viewing couldn't be captured (e.g. the tab was hidden):
-    // replay once while recording.
-    state.saveRequested = true;
-    els.btnSave.disabled = true;
-    setSaveStatus("🎬 Creating your video — it will replay once. Please keep this tab open.");
-    toast("🎬 Creating your video — keep this tab open until it finishes 💗", 6000);
-    startPlayback();
-  }
-
-  function openSaveFallback(reason) {
-    els.saveReason.textContent = reason || "This browser can't turn your photo animation into a video file.";
-    openModal(els.saveModal);
-  }
-
-  /** One picture with every photo: the show's final "Gotcha!" collage. */
-  async function saveCollage() {
-    if (!state.photos.length || !Show.timeline) return;
-    await preloadFonts();
-    const canvas = document.createElement("canvas");
-    const renderer = new ShowRenderer(canvas);
-    renderer.setup(state.photos, Show.timeline);
-    renderer.lastSegKey = "outro:";
-    renderer.stamped = true;
-    renderer.draw(Show.timeline.total, performance.now());
-    canvas.toBlob((blob) => {
-      if (blob) deliverFile(blob, `${CONFIG.downloadName}-collage-${timestamp()}.png`, "🖼️ Photo collage saved!");
-      else toast("Sorry, the collage couldn't be created in this browser.");
-    }, "image/png");
+    setSaveStatus("📥 Saved! Check your Downloads folder.");
   }
 
   /* ========================================================================
      13. Reset / navigation
      ======================================================================== */
-  function abortChallenge() {
-    state.sessionId++;
-    cancelAnimationFrame(state.rafId);
-    releaseWakeLock();
-    stopCamera();
-  }
-
   function resetToWelcome() {
     state.sessionId++;
     cancelAnimationFrame(state.rafId);
-    Show.stop();
-    clearEndTimers();
-    stopMusicFade();
+    Picture.stop();
     releaseWakeLock();
     stopCamera();
-    Composite.reset();
     LoveFX.stop();
 
-    const m = els.music;
-    try {
-      m.pause();
-      m.currentTime = 0;
-    } catch (_) { /* ignore */ }
-    if (state.volumeControllable) m.volume = state.volume;
+    [els.music, els.meow].forEach((m) => {
+      try {
+        m.pause();
+        m.currentTime = 0;
+      } catch (_) { /* ignore */ }
+    });
 
     state.photos = [];
-    state.saveRequested = false;
     state.timeline = null;
-    const sc = els.showCanvas;
-    sc.getContext("2d").clearRect(0, 0, sc.width, sc.height);
+    state.pictureBlob = null;
+    if (state.pictureURL) URL.revokeObjectURL(state.pictureURL);
+    state.pictureURL = "";
+    els.pictureImg.hidden = true;
+    els.pictureImg.removeAttribute("src");
+    const pc = els.pictureCanvas;
+    pc.getContext("2d").clearRect(0, 0, pc.width, pc.height);
 
     els.btnPlaySurprise.hidden = true;
-    els.btnSave.disabled = false;
     hideActions();
     setSaveStatus("");
     els.challenge.classList.remove("is-intro", "is-prep", "is-action");
     els.completeCard.classList.remove("is-loading");
-    [els.consentModal, els.errorModal, els.saveModal].forEach((m2) => {
-      m2.hidden = true;
+    [els.consentModal, els.errorModal].forEach((m) => {
+      m.hidden = true;
     });
     setLoveTheme(false);
     showScreen("welcome");
@@ -2166,14 +1881,12 @@
     });
 
     els.btnQuit.addEventListener("click", () => {
-      if (window.confirm("Quit the challenge? Your photos will be deleted.")) {
-        abortChallenge();
-        resetToWelcome();
-      }
+      if (window.confirm("Quit the challenge? Your photos will be deleted.")) resetToWelcome();
     });
 
     els.btnPlaySurprise.addEventListener("click", () => {
       if (state.audioCtx && state.audioCtx.state !== "running") state.audioCtx.resume().catch(() => {});
+      if (CONFIG.meow.enabled) primeMedia(els.meow);
       startPlayback();
     });
 
@@ -2189,12 +1902,6 @@
     });
 
     els.btnSave.addEventListener("click", onSaveClick);
-    els.btnSaveCollage.addEventListener("click", saveCollage);
-    els.btnSaveClose.addEventListener("click", () => closeModal(els.saveModal));
-    els.btnSavePhoto.addEventListener("click", () => {
-      closeModal(els.saveModal);
-      saveCollage();
-    });
 
     els.btnMute.addEventListener("click", () => {
       state.muted = !state.muted;
@@ -2213,21 +1920,15 @@
 
     els.music.addEventListener("error", () => {
       state.musicOk = false;
-      console.warn(`[music] Could not load ${CONFIG.music.src}. The show will play without music.`);
+      console.warn(`[music] Could not load ${CONFIG.music.src}. The picture will show without music.`);
     });
 
     document.addEventListener("keydown", (e) => {
-      if (e.key !== "Escape") return;
-      if (!els.consentModal.hidden) closeModal(els.consentModal);
-      else if (!els.saveModal.hidden) closeModal(els.saveModal);
+      if (e.key === "Escape" && !els.consentModal.hidden) closeModal(els.consentModal);
     });
 
     document.addEventListener("visibilitychange", () => {
-      if (document.hidden) {
-        if (Composite.recording) Composite.hiddenDuringRecord = true;
-        return;
-      }
-      if (state.phase === "challenge") requestWakeLock();
+      if (!document.hidden && state.phase === "challenge") requestWakeLock();
     });
 
     window.addEventListener("pagehide", stopCamera);
@@ -2237,9 +1938,10 @@
      15. Init
      ======================================================================== */
   function init() {
-    // Music source comes from CONFIG so there is only one place to change it.
+    // Audio sources come from CONFIG so there is only one place to change them.
     els.music.src = CONFIG.music.src;
     els.music.loop = true;
+    if (CONFIG.meow.enabled) els.meow.src = CONFIG.meow.src;
     els.volume.value = String(state.volume);
     if (!state.volumeControllable) {
       els.soundControls.classList.add("no-volume");
@@ -2262,7 +1964,6 @@
     });
     els.snapTotal.textContent = String(CONFIG.actions.length);
 
-    Composite.detect();
     applyVolume();
     wireEvents();
   }
