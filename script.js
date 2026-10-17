@@ -225,6 +225,7 @@
     volume: CONFIG.music.volume,
     muted: false,
     volumeControllable: canSetMediaVolume(),
+    playToken: 0,
     pictureBlob: null,
     pictureURL: "",
     toastTimer: 0,
@@ -306,25 +307,30 @@
     return ctx;
   }
 
-  /** "Primes" an <audio> element with a muted play so it may play later without a tap. */
+  /** "Primes" an <audio> element with a silent play so it may play later without a tap. */
   function primeMedia(el) {
     if (!el || !el.getAttribute("src") || !el.paused) return;
+    const done = () => {
+      if (!el.priming) return;
+      el.priming = false;
+      el.muted = state.muted;
+    };
     try {
+      el.priming = true;
       el.muted = true;
       const p = el.play();
       if (p && typeof p.then === "function") {
         p.then(() => {
-          if (state.phase !== "reveal") {
-            el.pause();
-            el.currentTime = 0;
-          }
-          el.muted = state.muted;
-        }).catch(() => {
-          el.muted = state.muted;
-        });
+          if (!el.priming) return; // a real play() took over meanwhile
+          el.pause();
+          el.currentTime = 0;
+          done();
+        }).catch(done);
+      } else {
+        done();
       }
     } catch (_) {
-      el.muted = state.muted;
+      done();
     }
   }
 
@@ -414,6 +420,8 @@
     if (!CONFIG.meow.enabled || state.muted) return;
     const m = els.meow;
     try {
+      m.priming = false;
+      m.muted = state.muted;
       m.currentTime = 0;
       const p = m.play();
       if (p && p.catch) p.catch(() => {});
@@ -422,7 +430,7 @@
 
   function applyVolume() {
     [els.music, els.meow].forEach((m) => {
-      m.muted = state.muted;
+      if (!m.priming) m.muted = state.muted; // stays silent while being primed
       if (state.volumeControllable) m.volume = state.volume;
     });
     const silent = state.muted || state.volume === 0;
@@ -453,7 +461,7 @@
       message: "We need your camera to play the challenge. Nothing is uploaded — your photos stay on your device.",
       tips: [
         "Chrome / Edge (computer): click the camera or 🔒 icon in the address bar → Allow camera → Try Again.",
-        "iPhone Safari: tap \"aA\" in the address bar → Website Settings → Camera → Allow.",
+        "iPhone Safari: tap the page-menu button in the address bar (\"aA\" or the page icon; on newer iOS it may be under •••) → Website Settings → Camera → Allow. Or: Settings → Apps → Safari → Camera → Allow.",
         "Android Chrome: tap ⋮ → Settings → Site settings → Camera → allow this site.",
         "Also check your device settings allow the browser to use the camera.",
       ],
@@ -745,12 +753,17 @@
     els.progressFill.style.width = "0%";
     showScreen("challenge");
     requestWakeLock();
-    const startedAt = performance.now();
     const sessionId = ++state.sessionId;
+    // The clock advances by (clamped) frame steps instead of wall-clock time,
+    // so it pauses while the Quit dialog is open or the app is in the background.
+    let t = 0;
+    let last = performance.now();
 
     const tick = () => {
       if (state.phase !== "challenge" || sessionId !== state.sessionId) return;
-      const t = (performance.now() - startedAt) / 1000;
+      const now = performance.now();
+      t += Math.min((now - last) / 1000, 0.25);
+      last = now;
       const { segs, total } = state.timeline;
 
       const pct = clamp(t / total, 0, 1) * 100;
@@ -881,11 +894,53 @@
       return this.loading;
     },
 
-    /** Returns { M, d, theta, nose } for the biggest face in the canvas, or null. */
+    /**
+     * Returns { M, d, theta, nose } for the biggest face in the canvas, or null.
+     * Small faces (e.g. a phone propped far away so both hands fit) are easy to
+     * miss in the full frame, so it then looks again in zoomed-in regions.
+     */
     detect(canvas) {
       if (!this.detector) return null;
+      const W = canvas.width;
+      const H = canvas.height;
+      const tooSmall = (f) => !f || f.d < 0.065 * Math.max(W, H);
+      let face = this.detectIn(canvas, 0, 0, W, H);
+      if (!tooSmall(face)) return face;
+      const side = Math.min(W, H);
+      const regions =
+        W < H
+          ? [ // portrait: top square, a slightly lower square, then a closer look at the upper middle
+              [0, 0, side],
+              [0, Math.min(H * 0.18, H - side), side],
+              [W * 0.2, H * 0.06, W * 0.6],
+            ]
+          : [ // landscape: centre square, then a closer look at the upper middle
+              [(W - side) / 2, 0, side],
+              [(W - side * 0.6) / 2, H * 0.04, side * 0.6],
+            ];
+      for (const [x, y, size] of regions) {
+        const f = this.detectIn(canvas, x, y, size, size);
+        if (f) {
+          face = f; // the zoomed-in result is the more precise one
+          if (!tooSmall(f)) break;
+        }
+      }
+      return face;
+    },
+
+    /** Runs the detector on one region of the canvas and maps the result back. */
+    detectIn(src, x, y, w, h) {
       try {
-        const res = this.detector.detect(canvas);
+        let input = src;
+        if (x || y || w !== src.width || h !== src.height) {
+          const c = this.tmp || (this.tmp = document.createElement("canvas"));
+          const scale = Math.min(1, 640 / Math.max(w, h));
+          c.width = Math.max(1, Math.round(w * scale));
+          c.height = Math.max(1, Math.round(h * scale));
+          c.getContext("2d").drawImage(src, x, y, w, h, 0, 0, c.width, c.height);
+          input = c;
+        }
+        const res = this.detector.detect(input);
         const list = (res && res.detections) || [];
         let best = null;
         list.forEach((det) => {
@@ -893,9 +948,7 @@
           if (b && (!best || b.width * b.height > best.boundingBox.width * best.boundingBox.height)) best = det;
         });
         if (!best || !best.keypoints || best.keypoints.length < 3) return null;
-        const W = canvas.width;
-        const H = canvas.height;
-        const k = best.keypoints.map((p) => ({ x: p.x * W, y: p.y * H }));
+        const k = best.keypoints.map((p) => ({ x: x + p.x * w, y: y + p.y * h }));
         const [a, b] = k[0].x < k[1].x ? [k[0], k[1]] : [k[1], k[0]];
         const d = Math.hypot(b.x - a.x, b.y - a.y);
         if (!(d > 4)) return null;
@@ -935,11 +988,16 @@
     console.info(`[face] found ${found.length}/${photos.length} faces`);
   }
 
+  // Ear geometry, in eye distances (d) measured up from the eyes.
+  const EAR_BASE = 1.36; // where the ears sit on the head
+  const EAR_SIZE = 1.44; // how far the ear tips rise above their base (at scale 1)
+
   /**
    * Draws the cat filter in photo coordinates.
    * part = "ears" → only the ears; part = "face" → nose, whiskers, blush.
+   * earScale shrinks the ears when there is little room above the photo.
    */
-  function drawCatFace(g, face, part) {
+  function drawCatFace(g, face, part, earScale = 1) {
     const cfg = CONFIG.catFace;
     const { M, d, theta } = face;
     const up = { x: Math.sin(theta), y: -Math.cos(theta) };
@@ -948,9 +1006,9 @@
 
     if (part === "ears" && cfg.ears) {
       for (const side of [-1, 1]) {
-        const b = at(1.36, side * 0.98);
-        const h = 1.35 * d;
-        const w = 1.1 * d;
+        const b = at(EAR_BASE, side * 0.98);
+        const h = 1.35 * d * earScale;
+        const w = 1.1 * d * earScale;
         g.save();
         g.translate(b.x, b.y);
         g.rotate(theta + side * 0.38);
@@ -1139,6 +1197,11 @@
       const p0 = photos[0].canvas;
       const portrait = p0.width < p0.height;
       this.tileAR = portrait ? 0.8 : 1; // photo window shape inside each card
+      // How far the cat ears stick out above each card (fraction of the photo width).
+      // The layout keeps that much room free; bigger ears are shrunk to fit.
+      this.crops = photos.map((p) => this.cropFor(p));
+      const need = photos.map((p, i) => (EAR_BASE + EAR_SIZE) * p.face.d - (p.face.M.y - this.crops[i].y));
+      this.popFrac = clamp(Math.max(...need.map((v, i) => v / this.crops[i].w - 0.055)), 0, 0.28);
       const W = CONFIG.picture.width;
       const H = Math.round(W * (portrait ? 1.5 : 1.25));
       this.W = W;
@@ -1164,12 +1227,13 @@
       };
       const asCell = fit(n + 1, area.h, false);
       const asBanner = n >= 2 ? fit(n, area.h - bannerH - H * 0.02, true) : null;
-      const useBanner = !!asBanner && asBanner.L.pw >= asCell.L.pw;
+      // the full grid + banner looks tidier, so it wins unless its photos are >10 % smaller
+      const useBanner = !!asBanner && asBanner.L.pw >= asCell.L.pw * 0.9;
       const { cols, rows, L, areaH } = useBanner ? asBanner : asCell;
       const cells = useBanner ? n : n + 1;
       this.card = L;
       const cellW = area.w / cols;
-      const cellH = Math.min(areaH / rows, L.h / 0.86);
+      const cellH = Math.min(areaH / rows, (L.h + L.pop) / 0.86);
       const gridH = cellH * rows;
       const blockH = gridH + (useBanner ? bannerH + H * 0.02 : 0);
       const top = area.y + (area.h - blockH) / 2;
@@ -1183,14 +1247,14 @@
         const offset = ((cols - inRow) * cellW) / 2; // centre a short last row
         this.slots.push({
           x: area.x + offset + col * cellW + cellW / 2,
-          y: top + row * cellH + cellH / 2,
+          y: top + row * cellH + cellH / 2 + L.pop / 2, // card sits low, ears get the space above
           rot: ((i * 7919) % 5 - 2) * 0.022,
           badge: i === badgeIndex,
         });
       }
 
       this.prerenderBackground();
-      this.cards = photos.map((p) => this.prerenderPhotoCard(p));
+      this.cards = photos.map((p, i) => this.prerenderPhotoCard(p, this.crops[i]));
       if (useBanner) {
         this.badge = this.prerenderBanner(W * 0.86, bannerH);
         this.badgePos = { x: W / 2, y: top + gridH + H * 0.02 + bannerH / 2, rot: -0.03 };
@@ -1211,15 +1275,16 @@
       const bRatio = 0.055; // border relative to photo width
       const stripRatio = 0.2; // caption strip relative to photo height
       const ar = this.tileAR;
+      const pop = this.popFrac || 0; // room for ears above the card
       let pw = maxW / (1 + 2 * bRatio);
       let ph = pw / ar;
-      if (ph * (1 + stripRatio) + pw * bRatio > maxH) {
-        ph = maxH / (1 + stripRatio + ar * bRatio);
+      if (ph * (1 + stripRatio) + pw * (bRatio + pop) > maxH) {
+        ph = maxH / (1 + stripRatio + ar * (bRatio + pop));
         pw = ph * ar;
       }
       const b = pw * bRatio;
       const strip = ph * stripRatio;
-      return { pw, ph, b, strip, w: pw + 2 * b, h: ph + b + strip };
+      return { pw, ph, b, strip, w: pw + 2 * b, h: ph + b + strip, pop: pw * pop };
     }
 
     /** Crop window around the face, so every card shows the pose with room for the ears. */
@@ -1248,14 +1313,18 @@
       };
     }
 
-    prerenderPhotoCard(photo) {
+    prerenderPhotoCard(photo, crop) {
       const L = this.card;
       const pad = Math.round(L.w * 0.12);
-      const crop = this.cropFor(photo);
       const s = L.pw / crop.w;
-      // The ears may pop out above the polaroid — make room for them.
-      const earTop = (photo.face.M.y - crop.y - 2.85 * photo.face.d) * s + L.b; // relative to card top
-      const padTop = Math.round(pad + clamp(-earTop, 0, L.h * 0.4));
+      const { M, d } = photo.face;
+      // The ears may pop out above the polaroid, up to the room the layout kept free (L.pop).
+      const popFor = (k) => ((EAR_BASE + EAR_SIZE * k) * d - (M.y - crop.y)) * s - L.b;
+      let earScale = 1;
+      if (popFor(1) > L.pop) {
+        earScale = clamp(((L.pop + L.b) / s + (M.y - crop.y) - EAR_BASE * d) / (EAR_SIZE * d), 0.5, 1);
+      }
+      const padTop = Math.round(pad + clamp(popFor(earScale), 0, L.h));
       const c = document.createElement("canvas");
       c.width = Math.round(L.w + pad * 2);
       c.height = Math.round(L.h + padTop + pad);
@@ -1283,13 +1352,13 @@
       g.drawImage(photo.canvas, 0, 0);
       drawCatFace(g, photo.face, "face");
       g.restore();
-      // cat ears: not clipped, so they can pop out of the frame
+      // cat ears: free to pop out above (and beside) the frame, but not over the caption
       g.save();
       g.beginPath();
-      g.rect(pad - L.b, 0, L.w + 2 * L.b, padTop + L.b + L.ph);
+      g.rect(0, 0, c.width, padTop + L.b + L.ph);
       g.clip();
       toPhoto();
-      drawCatFace(g, photo.face, "ears");
+      drawCatFace(g, photo.face, "ears", earScale);
       g.restore();
       // caption
       const action = photo.action || {};
@@ -1709,6 +1778,7 @@
    */
   function startPlayback() {
     const m = els.music;
+    m.priming = false; // this real play() replaces any pending priming
     Picture.stop();
     Picture.poster();
     els.btnPlaySurprise.hidden = true;
@@ -1722,19 +1792,21 @@
 
     const musicPlay = state.musicOk ? m.play() : Promise.resolve();
     const sessionId = state.sessionId;
+    const token = ++state.playToken; // a newer Watch Again makes this call stale
     Promise.resolve(musicPlay)
       .then(() => "ok")
       .catch((err) => err)
       .then((result) => {
-        if (sessionId !== state.sessionId || state.phase !== "reveal") return;
+        if (token !== state.playToken || sessionId !== state.sessionId || state.phase !== "reveal") return;
         if (result !== "ok") {
           if (result && result.name === "NotAllowedError") {
             m.pause();
             showPlaySurprise();
             return;
           }
-          console.warn("[music] could not play", result); // missing file etc. → carry on silently
-          state.musicOk = false;
+          // AbortError = play() interrupted (e.g. a quick second tap): not a broken file.
+          // A real loading problem is handled by the music "error" listener.
+          if (!result || result.name !== "AbortError") console.warn("[music] could not play", result);
         }
         LoveFX.burst(14);
         Picture.play();
@@ -1861,9 +1933,10 @@
       try {
         const file = new File([blob], filename, { type: "image/png" });
         if (navigator.canShare({ files: [file] })) {
+          setSaveStatus("Pick “Save Image” to keep it in Photos 💕");
           navigator
             .share({ files: [file], title: "My cute picture 💗" })
-            .then(() => setSaveStatus("💕 Saved! Choose “Save Image” to keep it in Photos."))
+            .then(() => setSaveStatus("💕 Done!"))
             .catch((err) => {
               if (err && err.name === "AbortError") return;
               downloadBlob(blob, filename);

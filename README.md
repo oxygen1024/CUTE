@@ -23,7 +23,7 @@ assets/
   funny.mp3, romantic.mp3 後備音樂（原創），想用就改 CONFIG.music.src
   favicon.svg             網站圖示
   fonts/                  Fredoka + Pacifico 字型（SIL Open Font License）
-  vendor/mediapipe/       MediaPipe 人臉偵測（本機運行，Apache-2.0）
+  vendor/mediapipe/       MediaPipe 人臉偵測（本機運行，Apache-2.0；Browser 只下載約 10MB）
 tools/
   compose_cute.py         產生 cute.mp3
   compose_meow.py         產生 meow.mp3
@@ -123,7 +123,7 @@ faceDetection: {
 },
 ```
 
-- 人臉偵測檔案（約 19MB）喺用戶開始玩時就喺背景載入，玩完通常已經準備好。
+- 人臉偵測檔案喺用戶開始玩時就喺背景載入（每部機只下載約 10MB；repo 入面有 SIMD 同非 SIMD 兩個版本，Browser 只會揀其中一個），玩完通常已經準備好。
 - 某張相搵唔到塊面（例如用手遮住），會用其他相嘅平均位置放貓耳；全部都搵唔到就放喺畫面上方中間嘅估計位置。
 
 ---
